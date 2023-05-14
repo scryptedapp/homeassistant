@@ -18,7 +18,8 @@
       "type": "API",
       "interfaces": [
          "DeviceProvider"
-      ]
+      ],
+      "realfs": true
    },
    "dependencies": {
       "axios": "^0.24.0"

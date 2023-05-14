@@ -1,5 +1,6 @@
 {
    "name": "@scrypted/homeassistant",
+   "version": "0.0.3",
    "scripts": {
       "scrypted-setup-project": "scrypted-setup-project",
       "prescrypted-setup-project": "scrypted-package-json",
@@ -21,6 +22,13 @@
       ],
       "realfs": true
    },
+   "keywords": [
+      "scrypted",
+      "plugin",
+      "homeassistant",
+      "home",
+      "assistant"
+   ],
    "dependencies": {
       "axios": "^0.24.0"
    },

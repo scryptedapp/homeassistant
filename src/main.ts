@@ -2,6 +2,9 @@ import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDevice
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import { NotifyService } from './notify';
 
+if (!process.env.SUPERVISOR_TOKEN)
+    sdk.log.a('Scrypted must be installed as a Home Assistant Addon. The plugin does not support the current installation method yet.');
+
 class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider {
     storageSettings = new StorageSettings(this, {
     });

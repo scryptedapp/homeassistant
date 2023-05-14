@@ -8,5 +8,6 @@ class HomeAssistantPlugin extends ScryptedDeviceBase {
         super(nativeId);
     }
 }
+//
 
 export default HomeAssistantPlugin;

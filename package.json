@@ -1,6 +1,6 @@
 {
    "name": "@scrypted/homeassistant",
-   "version": "0.0.3",
+   "version": "0.0.6",
    "scripts": {
       "scrypted-setup-project": "scrypted-setup-project",
       "prescrypted-setup-project": "scrypted-package-json",
@@ -18,7 +18,8 @@
       "name": "Home Assistant",
       "type": "API",
       "interfaces": [
-         "DeviceProvider"
+         "DeviceProvider",
+         "Settings"
       ],
       "realfs": true
    },

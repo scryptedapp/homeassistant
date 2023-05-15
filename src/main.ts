@@ -1,12 +1,16 @@
-import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface } from '@scrypted/sdk';
+import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, Setting, SettingValue, Settings } from '@scrypted/sdk';
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import { NotifyService } from './notify';
 
 if (!process.env.SUPERVISOR_TOKEN)
     sdk.log.a('Scrypted must be installed as a Home Assistant Addon. The plugin does not support the current installation method yet.');
 
-class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider {
+class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, Settings {
     storageSettings = new StorageSettings(this, {
+        personalAccessToken: {
+            title: 'Personal Access Token',
+            description: 'Provide a personal access token for your Home Assistant user. Needed to support navigation back into the Scrypted addon.',
+        }
     });
 
     constructor(nativeId?: string) {
@@ -15,13 +19,21 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider {
         this.sync();
     }
 
+    getSettings(): Promise<Setting[]> {
+        return this.storageSettings.getSettings();
+    }
+
+    putSetting(key: string, value: SettingValue): Promise<void> {
+        return this.storageSettings.putSetting(key, value);
+    }
+
     getApiUrl() {
         return new URL('http://supervisor/core/api/');
     }
     getHeaders() {
         return {
-                Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
-            }
+            Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
+        }
     }
 
     async getDevice(nativeId: string): Promise<any> {

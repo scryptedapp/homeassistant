@@ -80,6 +80,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 name: service,
                 interfaces: [
                     ScryptedInterface.Notifier,
+                    ScryptedInterface.Settings,
                 ],
                 type: ScryptedDeviceType.Notifier,
             });

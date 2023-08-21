@@ -1,15 +1,25 @@
 import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, Setting, SettingValue, Settings } from '@scrypted/sdk';
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import { NotifyService } from './notify';
+import { clearWWWDirectory } from './www';
 
-if (!process.env.SUPERVISOR_TOKEN)
-    sdk.log.a('Scrypted must be installed as a Home Assistant Addon. The plugin does not support the current installation method yet.');
+if (process.env.SUPERVISOR_TOKEN)
+    clearWWWDirectory();
 
 class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, Settings {
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
             title: 'Personal Access Token',
             description: 'Provide a personal access token for your Home Assistant user. Needed to support navigation back into the Scrypted addon.',
+        },
+        address: {
+            title: 'Address',
+            description: 'The host and port of the Home Assistant server. E.g. 192.168.2.100:8123',
+            hide: !!process.env.SUPERVISOR_TOKEN,
+            placeholder: '192.168.2.100:8123',
+            onPut: () => {
+                this.sync();
+            }
         }
     });
 
@@ -28,11 +38,16 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     getApiUrl() {
-        return new URL('http://supervisor/core/api/');
+        if (process.env.SUPERVISOR_TOKEN)
+            return new URL('http://supervisor/core/api/');
+        if (!this.storageSettings.values.address)
+            throw new Error("address unconfigured");
+        return new URL(`http://${this.storageSettings.values.address}/api/`);
     }
+
     getHeaders() {
         return {
-            Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN}`,
+            Authorization: `Bearer ${process.env.SUPERVISOR_TOKEN || this.storageSettings.values.personalAccessToken}`,
         }
     }
 

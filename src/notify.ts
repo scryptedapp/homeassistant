@@ -24,13 +24,18 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
         }
 
         if (media) {
-            const jpeg = await sdk.mediaManager.convertMediaObjectToBuffer(media as any, 'image/jpeg');
-            await fs.promises.mkdir(wwwDirectory, {
-                recursive: true,
-            });
-            const filename = `${Math.random().toString(36)}${Math.random().toString(36)}.jpg`;
-            await fs.promises.writeFile(path.join(wwwDirectory, filename), jpeg);
-            image = `/local/scrypted/tmp/${filename}`
+            if (process.env.SUPERVISOR_TOKEN) {
+                const jpeg = await sdk.mediaManager.convertMediaObjectToBuffer(media as any, 'image/jpeg');
+                await fs.promises.mkdir(wwwDirectory, {
+                    recursive: true,
+                });
+                const filename = `${Math.random().toString(36)}${Math.random().toString(36)}.jpg`;
+                await fs.promises.writeFile(path.join(wwwDirectory, filename), jpeg);
+                image = `/local/scrypted/tmp/${filename}`
+            }
+            else {
+                image = await sdk.mediaManager.convertMediaObjectToUrl(media, 'image/jpeg');
+            }
         }
 
         if (image) {

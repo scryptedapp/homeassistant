@@ -43,14 +43,9 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
             data.image = image;
         }
 
-        if (options?.data) {
-            const { lovelace } = options.data;
-            if (lovelace) {
-                data ||= {};
-                const url = `/lovelace/${lovelace}`;
-                data.url = url;
-                data.clickAction = url;
-            }
+        if (options?.data?.ha) {
+            data ||= {};
+            Object.assign(data, options.data.ha);
         }
 
         const response = await fetch(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()), {

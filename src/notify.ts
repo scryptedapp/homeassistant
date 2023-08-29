@@ -40,7 +40,6 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
             }
         }
 
-        data ||= {};
         if (image)
             data.image = image;
 

@@ -11,7 +11,9 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
 
     async sendNotification(title: string, options?: NotifierOptions, media?: string | MediaObject, icon?: string | MediaObject): Promise<void> {
         let image: string;
-        let data: any;
+        let data: any = {
+            priority: 'high',
+        };
 
         if (typeof media === 'string') {
             if (media.startsWith('http')) {
@@ -38,15 +40,12 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
             }
         }
 
-        if (image) {
-            data ||= {};
+        data ||= {};
+        if (image)
             data.image = image;
-        }
 
-        if (options?.data?.ha) {
-            data ||= {};
-            Object.assign(data, options.data.ha);
-        }
+        if (options?.data?.ha)
+            Object.assign(data, options.data.ha)
 
         const response = await fetch(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()), {
             headers: this.plugin.getHeaders(),

@@ -2,6 +2,12 @@ import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDevice
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import { NotifyService } from './notify';
 import { clearWWWDirectory } from './www';
+import axios from 'axios';
+import https from 'https';
+
+const httpsAgent = new https.Agent({
+    rejectUnauthorized: false,
+});
 
 if (process.env.SUPERVISOR_TOKEN)
     clearWWWDirectory();
@@ -73,10 +79,11 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async sync() {
-        const response = await fetch(new URL('services', this.getApiUrl()), {
+        const response = await axios.get(new URL('services', this.getApiUrl()).toString(), {
             headers: this.getHeaders(),
+            httpsAgent,
         });
-        const json = await response.json() as any[];
+        const json = response.data as any;
         this.console.log(json);
 
         const notify = json.find(service => service.domain === 'notify');

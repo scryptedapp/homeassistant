@@ -20,7 +20,20 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             onPut: () => {
                 this.sync();
             }
-        }
+        },
+        protocol: {
+            title: 'Protocol',
+            description: 'The protocol used to connect to the Home Assistant server. Typically http on port 8123.',
+            hide: !!process.env.SUPERVISOR_TOKEN,
+            defaultValue: 'http',
+            choices: [
+                'http',
+                'https',
+            ],
+            onPut: () => {
+                this.sync();
+            }
+        },
     });
 
     constructor(nativeId?: string) {
@@ -42,7 +55,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             return new URL('http://supervisor/core/api/');
         if (!this.storageSettings.values.address)
             throw new Error("address unconfigured");
-        return new URL(`http://${this.storageSettings.values.address}/api/`);
+        return new URL(`${this.storageSettings.values.protocol}://${this.storageSettings.values.address}/api/`);
     }
 
     getHeaders() {

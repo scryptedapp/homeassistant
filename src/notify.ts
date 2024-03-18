@@ -36,7 +36,12 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
                 image = `/local/scrypted/tmp/${filename}`
             }
             else {
-                image = await sdk.mediaManager.convertMediaObjectToUrl(media, 'image/jpeg');
+                try {
+                    image = await sdk.mediaManager.convertMediaObjectToUrl(media, 'image/jpeg');
+                }
+                catch (e) {
+                    this.console.error('Error creating external URL for image. Is the Scrypted Cloud plugin installed?', e);
+                }
             }
         }
 

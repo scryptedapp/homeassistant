@@ -26,16 +26,24 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
         }
 
         if (media) {
-            if (process.env.SUPERVISOR_TOKEN) {
-                const jpeg = await sdk.mediaManager.convertMediaObjectToBuffer(media as any, 'image/jpeg');
-                await fs.promises.mkdir(wwwDirectory, {
-                    recursive: true,
-                });
-                const filename = `${Math.random().toString(36)}${Math.random().toString(36)}.jpg`;
-                await fs.promises.writeFile(path.join(wwwDirectory, filename), jpeg);
-                image = `/local/scrypted/tmp/${filename}`
+            let tryCloud = !process.env.SUPERVISOR_TOKEN;
+            if (!tryCloud) {
+                try {
+                    const jpeg = await sdk.mediaManager.convertMediaObjectToBuffer(media as any, 'image/jpeg');
+                    await fs.promises.mkdir(wwwDirectory, {
+                        recursive: true,
+                    });
+                    const filename = `${Math.random().toString(36)}${Math.random().toString(36)}.jpg`;
+                    await fs.promises.writeFile(path.join(wwwDirectory, filename), jpeg);
+                    image = `/local/scrypted/tmp/${filename}`
+                }
+                catch (e) {
+                    tryCloud = true;
+                    this.console.error('Error creating local URL for image. Is the Supervisor token set?', e);
+                }
             }
-            else {
+
+            if (tryCloud) {
                 try {
                     image = await sdk.mediaManager.convertMediaObjectToUrl(media, 'image/jpeg');
                 }

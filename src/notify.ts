@@ -59,6 +59,8 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
         if (options?.data?.ha)
             Object.assign(data, options.data.ha)
 
+        this.console.log('ha notification payload', data);
+
         const response = await fetch(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()), {
             headers: this.plugin.getHeaders(),
             method: 'POST',

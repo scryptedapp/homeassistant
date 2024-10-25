@@ -13,7 +13,6 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
         let image: string;
         let data: any = {
             priority: 'high',
-            channel: 'scrypted'
         };
 
         if (typeof media === 'string') {
@@ -57,9 +56,10 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
         if (image)
             data.image = image;
 
-         // Append the channel to the default 'scrypted' channel, if specified
-        if (options?.channel && options?.channel.length > 0)
-            data.channel += "_" + options.channel
+        // Append the channel to the default 'scrypted' channel, if specified
+        data.channel = 'scrypted'
+        if (options?.android?.channel && options?.android?.channel.length > 0)
+            data.channel += "_" + options.android.channel
 
         if (options?.data?.ha)
             Object.assign(data, options.data.ha)

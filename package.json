@@ -1,6 +1,6 @@
 {
    "name": "@scrypted/homeassistant",
-   "version": "0.0.19",
+   "version": "0.0.22",
    "scripts": {
       "scrypted-setup-project": "scrypted-setup-project",
       "prescrypted-setup-project": "scrypted-package-json",
@@ -31,10 +31,10 @@
       "assistant"
    ],
    "dependencies": {
-      "axios": "^1.6.7"
+      "axios": "^1.7.7"
    },
    "devDependencies": {
-      "@scrypted/sdk": "^0.3.61",
-      "@types/node": "^20.11.19"
+      "@scrypted/sdk": "^0.3.69",
+      "@types/node": "^22.8.4"
    }
 }

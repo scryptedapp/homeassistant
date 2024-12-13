@@ -1,8 +1,9 @@
 import sdk, { DeviceProvider, MediaObject, Notifier, NotifierOptions, ScryptedDeviceBase } from "@scrypted/sdk";
-import HomeAssistantPlugin from "./main";
+import HomeAssistantPlugin, { httpsAgent } from "./main";
 import fs from 'fs';
 import path from 'path';
 import { wwwDirectory } from "./www";
+import axios from "axios";
 
 export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
     constructor(public plugin: HomeAssistantPlugin, nativeId: string) {
@@ -66,19 +67,25 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
 
         this.console.log('ha notification payload', data);
 
-        const response = await fetch(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()), {
-            headers: this.plugin.getHeaders(),
-            method: 'POST',
-            body: JSON.stringify({
-                title,
-                message: options.body,
-                data,
-            })
-        });
-
-        this.console.log('notification result', response.status, response.statusText);
-        const json = await response.json();
-        this.console.log('notification sent', json);
+        try {
+            const response = await axios.post(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()).toString(),
+                {
+                    title,
+                    message: options.body,
+                    data,
+                },
+                {
+                    responseType: 'json',
+                    headers: this.plugin.getHeaders(),
+                    httpsAgent,
+                }
+            );
+    
+            this.console.log('notification result', response.status, response.statusText);
+            this.console.log('notification sent', response.data);
+        } catch (e) {
+            this.console.log('Error in HA notification', e);
+        }
     }
 }
 

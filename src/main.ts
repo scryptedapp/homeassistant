@@ -5,7 +5,7 @@ import { clearWWWDirectory } from './www';
 import axios from 'axios';
 import https from 'https';
 
-const httpsAgent = new https.Agent({
+export const httpsAgent = new https.Agent({
     rejectUnauthorized: false,
 });
 

@@ -1,18 +1,37 @@
-import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, Setting, SettingValue, Settings } from '@scrypted/sdk';
+import sdk, { DeviceManifest, DeviceProvider, LockState, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, SecuritySystemMode, Setting, SettingValue, Settings } from '@scrypted/sdk';
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import { NotifyService } from './notify';
 import { clearWWWDirectory } from './www';
 import axios from 'axios';
 import https from 'https';
+import sortBy from 'lodash/sortBy';
+
+const wnd = globalThis;
+wnd.WebSocket = require("ws");
+
+import {
+    createConnection,
+    subscribeEntities,
+    createLongLivedTokenAuth,
+} from "home-assistant-js-websocket";
+import { domainToDiscoveryDataMap, formatEntityIdToDeviceName, supportedDomains } from './utils';
+import { BinarySensorDevice, HaDevice, LockDevice, SecuritySystemDevice } from './device';
 
 export const httpsAgent = new https.Agent({
     rejectUnauthorized: false,
 });
 
+const notifyPrefix = 'notify';
+const devicesPrefix = 'haDevices';
+
 if (process.env.SUPERVISOR_TOKEN)
     clearWWWDirectory();
 
 class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, Settings {
+    connection: any;
+    processing: boolean;
+    deviceMap: Record<string, BinarySensorDevice | LockDevice | SecuritySystemDevice> = {};
+
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
             title: 'Personal Access Token',
@@ -39,6 +58,12 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             onPut: () => {
                 this.sync();
             }
+        },
+        entitiesToFetch: {
+            title: 'Entities to fetch',
+            multiple: true,
+            choices: [],
+            combobox: true,
         },
     });
 
@@ -71,20 +96,42 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async getDevice(nativeId: string): Promise<any> {
-        if (nativeId === 'notify')
-            return new NotifyService(this, 'notify');
+        if (nativeId === notifyPrefix)
+            return new NotifyService(this, notifyPrefix);
+
+        if (nativeId === devicesPrefix) {
+            return new HaDevice(this, devicesPrefix);
+        }
     }
 
     async releaseDevice(id: string, nativeId: string): Promise<void> {
     }
 
-    async sync() {
+    async connectWs() {
+        if (this.connection) {
+            this.connection.close();
+        }
+
+        try {
+            const auth = createLongLivedTokenAuth(
+                this.getApiUrl().origin,
+                this.storageSettings.values.personalAccessToken,
+            );
+
+            this.connection = await createConnection({ auth });
+            // subscribeEntities(this.connection, (entities) => console.log(entities));
+        } catch (e) {
+            this.console.log('Error in WS subscription', e);
+        }
+    }
+
+    async syncDevices() {
         const response = await axios.get(new URL('services', this.getApiUrl()).toString(), {
             headers: this.getHeaders(),
             httpsAgent,
         });
         const json = response.data as any;
-        this.console.log(json);
+        this.console.log('Services response', json);
 
         const notify = json.find(service => service.domain === 'notify');
         const { services } = notify;
@@ -92,8 +139,16 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         const rootManifest: DeviceManifest = {
             devices: [
                 {
-                    nativeId: 'notify',
+                    nativeId: notifyPrefix,
                     name: 'Notify Service',
+                    interfaces: [
+                        ScryptedInterface.DeviceProvider,
+                    ],
+                    type: ScryptedDeviceType.Builtin,
+                },
+                {
+                    nativeId: devicesPrefix,
+                    name: 'Homeassistant devices',
                     interfaces: [
                         ScryptedInterface.DeviceProvider,
                     ],
@@ -104,14 +159,14 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
         await sdk.deviceManager.onDevicesChanged(rootManifest);
 
-        const manifest: DeviceManifest = {
-            providerNativeId: 'notify',
+        const notifiersManifest: DeviceManifest = {
+            providerNativeId: notifyPrefix,
             devices: [],
         };
 
         for (const service of Object.keys(services)) {
-            manifest.devices.push({
-                nativeId: `notify:${service}`,
+            notifiersManifest.devices.push({
+                nativeId: `${notifyPrefix}:${service}`,
                 name: service,
                 interfaces: [
                     ScryptedInterface.Notifier,
@@ -120,7 +175,102 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             });
         }
 
-        await sdk.deviceManager.onDevicesChanged(manifest);
+        await sdk.deviceManager.onDevicesChanged(notifiersManifest);
+
+        const devicesManifest: DeviceManifest = {
+            providerNativeId: devicesPrefix,
+            devices: [],
+        };
+
+        for (const entity of this.storageSettings.values.entitiesToFetch) {
+            const [domain, entityId] = entity.split('.');
+            const deviceName = formatEntityIdToDeviceName(entityId);
+
+            const domainData = domainToDiscoveryDataMap[domain];
+
+            if (domainData) {
+                const { interfaces, nativeIdPrefix, type } = domainData;
+                devicesManifest.devices.push({
+                    nativeId: `${nativeIdPrefix}:${entity}`,
+                    name: deviceName,
+                    interfaces,
+                    type,
+                });
+            }
+        }
+
+        await sdk.deviceManager.onDevicesChanged(devicesManifest);
+    }
+
+    async fetchAvailableEntities() {
+        const response = await axios.get(new URL('states', this.getApiUrl()).toString(), {
+            headers: this.getHeaders(),
+            httpsAgent,
+        });
+
+        const entityIds = sortBy(
+            response.data
+                .filter(entityStatus => supportedDomains.some(domain => new RegExp(domain).test(entityStatus.entity_id))),
+            elem => elem.entity_id)
+            .map(entityStatus => entityStatus.entity_id);
+        this.console.log('Entity IDs found:', entityIds);
+
+        this.storageSettings.settings.entitiesToFetch.choices = entityIds;
+    }
+
+    async startEntitiesSync() {
+        if (this.connection) {
+            subscribeEntities(this.connection, (entities) => {
+                this.processing = true;
+
+                const filteredEntities: any[] = Object.entries(entities)
+                    .filter(([entityId,]) => this.storageSettings.values.entitiesToFetch.includes(entityId))
+                    .map(([_, data]) => data);
+
+                for (const entity of filteredEntities) {
+                    const { entity_id, state } = entity;
+                    const device = this.deviceMap[entity_id];
+
+                    if (device) {
+                        if (device.type === ScryptedDeviceType.Sensor) {
+                            device.binaryState = state === 'on' ? true :
+                                state === 'off' ? false :
+                                    device.binaryState;
+                        } else if (device.type === ScryptedDeviceType.Lock) {
+                            device.lockState = state === 'locked' ? LockState.Locked :
+                                state === 'unlocked' ? LockState.Unlocked :
+                                    device.lockState;
+                        } else if (device.type === ScryptedDeviceType.SecuritySystem) {
+                            device.securitySystemState = {
+                                mode: state === 'disarmed' ? SecuritySystemMode.Disarmed :
+                                    state === 'armed_away' ? SecuritySystemMode.AwayArmed :
+                                        state === 'armed_home' ? SecuritySystemMode.HomeArmed :
+                                            state === 'armed_night' ? SecuritySystemMode.NightArmed :
+                                                device.securitySystemState.mode,
+                                supportedModes: [
+                                    SecuritySystemMode.Disarmed,
+                                    SecuritySystemMode.AwayArmed,
+                                    SecuritySystemMode.HomeArmed,
+                                    SecuritySystemMode.NightArmed
+                                ]
+
+                            }
+                        }
+                    }
+                }
+
+                this.processing = false;
+            });
+        }
+    }
+
+    async sync() {
+        await this.connectWs();
+        await this.fetchAvailableEntities();
+        await this.syncDevices();
+        await this.startEntitiesSync();
+
+
     }
 }
 

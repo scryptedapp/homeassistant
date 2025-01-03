@@ -31,11 +31,9 @@
       "assistant"
    ],
    "dependencies": {
-      "@types/lodash": "^4.17.13",
       "axios": "^1.7.9",
       "chalk": "4.1.2",
       "home-assistant-js-websocket": "^9.4.0",
-      "lodash": "^4.17.21",
       "ws": "^8.18.0"
    },
    "devDependencies": {

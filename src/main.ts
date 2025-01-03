@@ -4,22 +4,21 @@ import { NotifyService } from './notify';
 import { clearWWWDirectory } from './www';
 import axios from 'axios';
 import https from 'https';
-import sortBy from 'lodash/sortBy';
-
-const wnd = globalThis;
-wnd.WebSocket = require("ws");
-
 import {
     createConnection,
     subscribeEntities,
     createLongLivedTokenAuth,
 } from "home-assistant-js-websocket";
-import { domainToDiscoveryDataMap, formatEntityIdToDeviceName, supportedDomains } from './utils';
-import { BinarySensorDevice, HaDevice, LockDevice, SecuritySystemDevice } from './device';
+import { domainMetadataMap, formatEntityIdToDeviceName, HaEntityData, supportedDomains } from './utils';
+import { HaDevice } from './device';
+import { HaBaseDevice } from './types/baseDevice';
+import { HaWebsocket } from './websocket';
 
 export const httpsAgent = new https.Agent({
     rejectUnauthorized: false,
 });
+
+globalThis.WebSocket = HaWebsocket as any;
 
 const notifyPrefix = 'notify';
 const devicesPrefix = 'haDevices';
@@ -30,7 +29,7 @@ if (process.env.SUPERVISOR_TOKEN)
 class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, Settings {
     connection: any;
     processing: boolean;
-    deviceMap: Record<string, BinarySensorDevice | LockDevice | SecuritySystemDevice> = {};
+    deviceMap: Record<string, HaBaseDevice> = {};
 
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
@@ -64,6 +63,9 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             multiple: true,
             choices: [],
             combobox: true,
+            onPut: () => {
+                this.sync();
+            }
         },
     });
 
@@ -119,7 +121,6 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             );
 
             this.connection = await createConnection({ auth });
-            // subscribeEntities(this.connection, (entities) => console.log(entities));
         } catch (e) {
             this.console.log('Error in WS subscription', e);
         }
@@ -186,10 +187,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             const [domain, entityId] = entity.split('.');
             const deviceName = formatEntityIdToDeviceName(entityId);
 
-            const domainData = domainToDiscoveryDataMap[domain];
+            const domainMetadata = domainMetadataMap[domain];
 
-            if (domainData) {
-                const { interfaces, nativeIdPrefix, type } = domainData;
+            if (domainMetadata) {
+                const { interfaces, nativeIdPrefix, type } = domainMetadata;
                 devicesManifest.devices.push({
                     nativeId: `${nativeIdPrefix}:${entity}`,
                     name: deviceName,
@@ -208,11 +209,11 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             httpsAgent,
         });
 
-        const entityIds = sortBy(
+        const entityIds =
             response.data
-                .filter(entityStatus => supportedDomains.some(domain => new RegExp(domain).test(entityStatus.entity_id))),
-            elem => elem.entity_id)
-            .map(entityStatus => entityStatus.entity_id);
+                .filter(entityStatus => supportedDomains.some(domain => (entityStatus.entity_id as string).startsWith(domain)))
+                .map(entityStatus => entityStatus.entity_id);
+
         this.console.log('Entity IDs found:', entityIds);
 
         this.storageSettings.settings.entitiesToFetch.choices = entityIds;
@@ -220,42 +221,19 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     async startEntitiesSync() {
         if (this.connection) {
-            subscribeEntities(this.connection, (entities) => {
+            subscribeEntities(this.connection, (entities: Record<string, HaEntityData>) => {
                 this.processing = true;
 
-                const filteredEntities: any[] = Object.entries(entities)
+                const filteredEntities = Object.entries(entities)
                     .filter(([entityId,]) => this.storageSettings.values.entitiesToFetch.includes(entityId))
                     .map(([_, data]) => data);
 
                 for (const entity of filteredEntities) {
-                    const { entity_id, state } = entity;
+                    const { entity_id } = entity;
                     const device = this.deviceMap[entity_id];
 
                     if (device) {
-                        if (device.type === ScryptedDeviceType.Sensor) {
-                            device.binaryState = state === 'on' ? true :
-                                state === 'off' ? false :
-                                    device.binaryState;
-                        } else if (device.type === ScryptedDeviceType.Lock) {
-                            device.lockState = state === 'locked' ? LockState.Locked :
-                                state === 'unlocked' ? LockState.Unlocked :
-                                    device.lockState;
-                        } else if (device.type === ScryptedDeviceType.SecuritySystem) {
-                            device.securitySystemState = {
-                                mode: state === 'disarmed' ? SecuritySystemMode.Disarmed :
-                                    state === 'armed_away' ? SecuritySystemMode.AwayArmed :
-                                        state === 'armed_home' ? SecuritySystemMode.HomeArmed :
-                                            state === 'armed_night' ? SecuritySystemMode.NightArmed :
-                                                device.securitySystemState.mode,
-                                supportedModes: [
-                                    SecuritySystemMode.Disarmed,
-                                    SecuritySystemMode.AwayArmed,
-                                    SecuritySystemMode.HomeArmed,
-                                    SecuritySystemMode.NightArmed
-                                ]
-
-                            }
-                        }
+                        device.updateState(entity);
                     }
                 }
 

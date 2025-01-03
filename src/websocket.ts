@@ -1,4 +1,4 @@
-import { httpsAgent } from "./main";
+import { httpsAgent } from "./httpsagent";
 
 const WebSocket = require('ws');
 

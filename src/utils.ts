@@ -1,5 +1,5 @@
 import { ScryptedDeviceType, ScryptedInterface } from "@scrypted/sdk";
-import HomeAssistantPlugin from "./main";
+import type HomeAssistantPlugin from "./main";
 import { HaBaseDevice } from "./types/baseDevice";
 import { HaBinarySensor } from "./types/binarySensor";
 import { HaLock } from "./types/lock";

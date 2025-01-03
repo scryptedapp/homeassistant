@@ -1,7 +1,8 @@
 import { ScryptedDeviceBase } from "@scrypted/sdk";
-import HomeAssistantPlugin, { httpsAgent } from "../main";
+import type HomeAssistantPlugin from "../main";
 import axios from "axios";
 import { HaEntityData } from "../utils";
+import { httpsAgent } from "../httpsagent";
 
 export class HaBaseDevice extends ScryptedDeviceBase {
     agent = httpsAgent;

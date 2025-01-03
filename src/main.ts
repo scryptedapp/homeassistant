@@ -13,10 +13,7 @@ import { domainMetadataMap, formatEntityIdToDeviceName, HaEntityData, supportedD
 import { HaDevice } from './device';
 import { HaBaseDevice } from './types/baseDevice';
 import { HaWebsocket } from './websocket';
-
-export const httpsAgent = new https.Agent({
-    rejectUnauthorized: false,
-});
+import { httpsAgent } from './httpsagent';
 
 globalThis.WebSocket = HaWebsocket as any;
 

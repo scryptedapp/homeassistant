@@ -1,9 +1,10 @@
 import sdk, { DeviceProvider, MediaObject, Notifier, NotifierOptions, ScryptedDeviceBase } from "@scrypted/sdk";
-import HomeAssistantPlugin, { httpsAgent } from "./main";
+import type HomeAssistantPlugin from "./main";
 import fs from 'fs';
 import path from 'path';
 import { wwwDirectory } from "./www";
 import axios from "axios";
+import { httpsAgent } from "./httpsagent";
 
 export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
     constructor(public plugin: HomeAssistantPlugin, nativeId: string) {

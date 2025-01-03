@@ -1,19 +1,18 @@
-import sdk, { DeviceManifest, DeviceProvider, LockState, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, SecuritySystemMode, Setting, SettingValue, Settings } from '@scrypted/sdk';
+import sdk, { DeviceManifest, DeviceProvider, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, Setting, Settings, SettingValue } from '@scrypted/sdk';
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
-import { NotifyService } from './notify';
-import { clearWWWDirectory } from './www';
 import axios from 'axios';
-import https from 'https';
 import {
     createConnection,
-    subscribeEntities,
     createLongLivedTokenAuth,
+    subscribeEntities,
 } from "home-assistant-js-websocket";
-import { domainMetadataMap, formatEntityIdToDeviceName, HaEntityData, supportedDomains } from './utils';
 import { HaDevice } from './device';
-import { HaBaseDevice } from './types/baseDevice';
-import { HaWebsocket } from './websocket';
 import { httpsAgent } from './httpsagent';
+import { NotifyService } from './notify';
+import { HaBaseDevice } from './types/baseDevice';
+import { domainMetadataMap, formatEntityIdToDeviceName, HaEntityData, supportedDomains } from './utils';
+import { HaWebsocket } from './websocket';
+import { clearWWWDirectory } from './www';
 
 globalThis.WebSocket = HaWebsocket as any;
 
@@ -60,6 +59,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             multiple: true,
             choices: [],
             combobox: true,
+            defaultValue: [],
             onPut: () => {
                 this.sync();
             }
@@ -119,7 +119,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
             this.connection = await createConnection({ auth });
         } catch (e) {
-            this.console.log('Error in WS subscription', e);
+            this.console.error('Error in WS subscription', e);
         }
     }
 

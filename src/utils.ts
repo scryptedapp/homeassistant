@@ -6,6 +6,8 @@ import { HaLock } from "./types/lock";
 import { HaSwitch } from "./types/switch";
 import { HaLight } from "./types/light";
 import { HaSecuritySystem } from "./types/securitySystem";
+import { HaButton } from "./types/button";
+import { HaScript } from "./types/script";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -13,6 +15,8 @@ export enum HaDomain {
     Switch = 'switch',
     Light = 'light',
     AlarmControlPanel = 'alarm_control_panel',
+    Button = 'button',
+    Script = 'script',
 }
 
 export interface HaEntityData<TState extends string = string> {
@@ -27,6 +31,8 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.AlarmControlPanel,
     HaDomain.Light,
     HaDomain.Switch,
+    HaDomain.Button,
+    HaDomain.Script,
 ];
 
 export const formatEntityIdToDeviceName = (entityId) => {
@@ -77,5 +83,17 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         interfaces: [ScryptedInterface.OnOff],
         nativeIdPrefix: 'haLight',
         deviceConstructor: HaLight
+    },
+    [HaDomain.Button]: {
+        type: ScryptedDeviceType.Switch,
+        interfaces: [ScryptedInterface.OnOff],
+        nativeIdPrefix: 'haButton',
+        deviceConstructor: HaButton
+    },
+    [HaDomain.Script]: {
+        type: ScryptedDeviceType.Switch,
+        interfaces: [ScryptedInterface.OnOff],
+        nativeIdPrefix: 'haScript',
+        deviceConstructor: HaScript
     },
 }; 

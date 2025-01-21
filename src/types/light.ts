@@ -1,5 +1,5 @@
 import { HaBaseDevice } from "./baseDevice";
-import { Brightness, OnOff } from "@scrypted/sdk";
+import { OnOff } from "@scrypted/sdk";
 import { HaDomain, HaEntityData } from "../utils";
 
 enum HaLightState {

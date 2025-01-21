@@ -16,7 +16,8 @@ export class HaScript extends HaBaseDevice implements OnOff {
         return new Promise(async (resolve) => {
             this.on = true;
 
-            // Variables can be passed to scripts
+            // Variables can be passed to scripts. Ideally could just be done adding a storage on the switch
+            // and add settings to populate the variables
             await this.getActionFn(`services/${HaDomain.Script}/turn_on`)();
             sleep(1000);
             await this.turnOff();

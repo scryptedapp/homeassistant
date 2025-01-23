@@ -129,7 +129,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             httpsAgent,
         });
         const json = response.data as any;
-        this.console.log('Services response', json);
+        this.console.log('Services response', JSON.stringify(json));
 
         const notify = json.find(service => service.domain === 'notify');
         const { services } = notify;

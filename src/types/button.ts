@@ -1,26 +1,18 @@
 import { HaBaseDevice } from "./baseDevice";
-import { OnOff } from "@scrypted/sdk";
+import { Buttons, PressButtons } from "@scrypted/sdk";
 import { HaDomain } from "../utils";
-import { sleep } from "../../../scrypted/common/src/sleep";
 
-export class HaButton extends HaBaseDevice implements OnOff {
-    updateState() { }
+export const HaButtonActionButton = 'HaButton';
 
-    turnOff(): Promise<void> {
-        this.on = false;
+export class HaButton extends HaBaseDevice implements Buttons, PressButtons {
+    buttons = [HaButtonActionButton];
 
-        return;
+    updateState() {
     }
 
-    async turnOn(): Promise<void> {
-        return new Promise(async (resolve) => {
-            this.on = true;
-
+    async pressButton(button: string): Promise<void> {
+        if (button === HaButtonActionButton) {
             await this.getActionFn(`services/${HaDomain.Button}/press`)();
-            sleep(1000);
-            await this.turnOff();
-
-            resolve();
-        });
+        }
     }
 }

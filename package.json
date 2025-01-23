@@ -36,7 +36,7 @@
       "ws": "^8.18.0"
    },
    "devDependencies": {
-      "@scrypted/sdk": "0.3.104",
+      "@scrypted/sdk": "0.3.108",
       "@types/node": "^22.10.5"
    }
 }

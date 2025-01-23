@@ -13,4 +13,8 @@ export class HaCover extends HaBaseDevice implements Entry {
     closeEntry(): Promise<void> {
         return this.getActionFn(`services/${HaDomain.Cover}/close_cover`)();
     }
+
+    stopEntry(): Promise<void> {
+        return this.getActionFn(`services/${HaDomain.Cover}/stop_cover`)();
+    }
 }

@@ -92,13 +92,13 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
     },
     [HaDomain.Button]: {
         type: 'Button',
-        interfaces: [ScryptedInterface.Buttons],
+        interfaces: [ScryptedInterface.Buttons, ScryptedInterface.OnOff],
         nativeIdPrefix: 'haButton',
         deviceConstructor: HaButton
     },
     [HaDomain.Script]: {
         type: ScryptedDeviceType.Program,
-        interfaces: [ScryptedInterface.Program],
+        interfaces: [ScryptedInterface.Program, ScryptedInterface.OnOff],
         nativeIdPrefix: 'haScript',
         deviceConstructor: HaScript
     },

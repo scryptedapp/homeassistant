@@ -104,7 +104,7 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
     },
     [HaDomain.Cover]: {
         type: ScryptedDeviceType.WindowCovering,
-        interfaces: [ScryptedInterface.Entry],
+        interfaces: [ScryptedInterface.Entry, ScryptedInterface.Settings, ScryptedInterface.EntrySensor],
         nativeIdPrefix: 'haCover',
         deviceConstructor: HaCover
     },

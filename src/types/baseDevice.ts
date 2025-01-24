@@ -17,7 +17,6 @@ export class HaBaseDevice extends ScryptedDeviceBase {
     }
 
     updateState(entityData: HaEntityData) {
-        throw new Error("Method not implemented.");
     }
 
     getActionFn(serviceUrl: string, payload = this.defaultPayload) {

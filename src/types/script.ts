@@ -3,9 +3,6 @@ import { Program } from "@scrypted/sdk";
 import { HaDomain } from "../utils";
 
 export class HaScript extends HaBaseDevice implements Program {
-    updateState() {
-    }
-
     async run(variables?: { [name: string]: any; }): Promise<any> {
         const scriptName = this.entityId.split('.')[1];
 

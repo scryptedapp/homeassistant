@@ -6,6 +6,10 @@ import { HaLock } from "./types/lock";
 import { HaSwitch } from "./types/switch";
 import { HaLight } from "./types/light";
 import { HaSecuritySystem } from "./types/securitySystem";
+import { HaButton } from "./types/button";
+import { HaScript } from "./types/script";
+import { HaCover } from "./types/cover";
+import { HaClimate } from "./types/climate";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -13,6 +17,10 @@ export enum HaDomain {
     Switch = 'switch',
     Light = 'light',
     AlarmControlPanel = 'alarm_control_panel',
+    Button = 'button',
+    Script = 'script',
+    Cover = 'cover',
+    Climate = 'climate',
 }
 
 export interface HaEntityData<TState extends string = string> {
@@ -27,6 +35,10 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.AlarmControlPanel,
     HaDomain.Light,
     HaDomain.Switch,
+    HaDomain.Button,
+    HaDomain.Script,
+    HaDomain.Climate,
+    HaDomain.Cover,
 ];
 
 export const formatEntityIdToDeviceName = (entityId) => {
@@ -42,7 +54,7 @@ interface DeviceConstructor {
 
 interface DomainMetadata {
     nativeIdPrefix: string;
-    type: ScryptedDeviceType;
+    type: ScryptedDeviceType | string;
     interfaces: ScryptedInterface[];
     deviceConstructor: DeviceConstructor;
 }
@@ -77,5 +89,33 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         interfaces: [ScryptedInterface.OnOff],
         nativeIdPrefix: 'haLight',
         deviceConstructor: HaLight
+    },
+    [HaDomain.Button]: {
+        type: 'Button',
+        interfaces: [ScryptedInterface.Buttons],
+        nativeIdPrefix: 'haButton',
+        deviceConstructor: HaButton
+    },
+    [HaDomain.Script]: {
+        type: ScryptedDeviceType.Program,
+        interfaces: [ScryptedInterface.Program],
+        nativeIdPrefix: 'haScript',
+        deviceConstructor: HaScript
+    },
+    [HaDomain.Cover]: {
+        type: ScryptedDeviceType.WindowCovering,
+        interfaces: [ScryptedInterface.Entry],
+        nativeIdPrefix: 'haCover',
+        deviceConstructor: HaCover
+    },
+    [HaDomain.Climate]: {
+        type: ScryptedDeviceType.Thermostat,
+        interfaces: [
+            ScryptedInterface.Thermometer,
+            ScryptedInterface.TemperatureSetting,
+            ScryptedInterface.OnOff,
+        ],
+        nativeIdPrefix: 'haClimate',
+        deviceConstructor: HaClimate
     },
 }; 

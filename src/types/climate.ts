@@ -1,6 +1,8 @@
 import { HaDomain, HaEntityData } from "../utils";
 import { HaBaseDevice } from "./baseDevice";
-import { OnOff, TemperatureCommand, TemperatureSetting, TemperatureUnit, Thermometer, ThermostatMode } from "@scrypted/sdk";
+import { StorageSettings } from '@scrypted/sdk/storage-settings';
+import type HomeAssistantPlugin from "../main";
+import { OnOff, TemperatureCommand, TemperatureSetting, TemperatureUnit, Thermometer, ThermostatMode, Settings, Setting, SettingValue } from "@scrypted/sdk";
 
 enum HaClimateState {
     Off = 'off',
@@ -10,6 +12,11 @@ enum HaClimateState {
     FanOnly = 'fan_only',
     HeatCool = 'heat_cool',
     Heat = 'heat',
+}
+
+const haToScryptedUnit: Record<string, TemperatureUnit> = {
+    '°C': TemperatureUnit.C,
+    '°F': TemperatureUnit.F,
 }
 
 const haToScryptedStateMap: Record<HaClimateState, ThermostatMode> = {
@@ -28,7 +35,36 @@ const scryptedToHaStateMap: Record<ThermostatMode, HaClimateState> = Object.entr
     return ret;
 }, {} as Record<ThermostatMode, HaClimateState>);
 
-export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureSetting, OnOff {
+export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureSetting, OnOff, Settings {
+    storageSettings = new StorageSettings(this, {
+        unit: {
+            title: 'Unit',
+            choices: [TemperatureUnit.C, TemperatureUnit.F],
+            defaultValue: TemperatureUnit.C,
+            onPut: (_, newValue) => this.temperatureUnit = newValue
+        },
+    });
+
+    constructor(public plugin: HomeAssistantPlugin, nativeId: string, public entity: HaEntityData) {
+        super(plugin, nativeId, entity);
+
+        if (entity.attributes.unit_of_measurement) {
+            this.temperatureUnit = haToScryptedUnit[entity.attributes.unit_of_measurement];
+            this.storageSettings.values.unit = this.temperatureUnit;
+        } else {
+            this.temperatureUnit = this.storageSettings.values.unit;
+        }
+    }
+
+    async getSettings(): Promise<Setting[]> {
+        const settings = await this.storageSettings.getSettings();
+        return settings;
+    }
+
+    putSetting(key: string, value: SettingValue): Promise<void> {
+        return this.storageSettings.putSetting(key, value);
+    }
+
     turnOff(): Promise<void> {
         return this.getActionFn(`services/${HaDomain.Climate}/turn_off`)();
     }
@@ -50,7 +86,9 @@ export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureS
     }
 
     updateState(entityData: HaEntityData) {
-        const { attributes } = entityData;
-        this.temperature = attributes.current_temperature;
+        const { attributes, state } = entityData;
+        this.temperature = entityData.entity_id.startsWith('climate.') ? attributes.current_temperature :
+            state ? Number(state) :
+                undefined;
     }
 }

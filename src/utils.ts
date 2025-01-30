@@ -133,9 +133,16 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
     [HaDomain.Sensor]: undefined,
 };
 
+export const getSensorType = (entity: HaEntityData) => {
+    const isSensor = entity.entity_id.startsWith('sensor.');
+    const isTemperatureSensor = isSensor && entity.attributes.device_class === 'temperature' && entity.attributes.state_class === 'measurement';
+    const isHumiditySensor = isSensor && entity.attributes.device_class === 'humidity' && entity.attributes.state_class === 'measurement';
+
+    return { isSensor, isTemperatureSensor, isHumiditySensor }
+}
+
 export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
-    const isTemperatureSensor = entity.attributes.device_class === 'temperature' && entity.attributes.state_class === 'measurement';
-    const isHumiditySensor = entity.attributes.device_class === 'humidity' && entity.attributes.state_class === 'measurement';
+    const { isHumiditySensor, isTemperatureSensor } = getSensorType(entity);
 
     let domainMetadata: DomainMetadata;
     if (isTemperatureSensor) {

@@ -21,12 +21,22 @@ export enum HaDomain {
     Script = 'script',
     Cover = 'cover',
     Climate = 'climate',
+    Sensor = 'sensor',
+}
+
+interface Attributes {
+    device_class: string;
+    friendly_name: string;
+    unit_of_measurement: string;
+    state_class: string;
+    current_temperature: number;
+    current_position: number;
 }
 
 export interface HaEntityData<TState extends string = string> {
     entity_id: string;
     state: TState;
-    attributes: any;
+    attributes: Attributes
 }
 
 export const supportedDomains: HaDomain[] = [
@@ -39,6 +49,7 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.Script,
     HaDomain.Climate,
     HaDomain.Cover,
+    HaDomain.Sensor,
 ];
 
 export const formatEntityIdToDeviceName = (entityId) => {
@@ -49,7 +60,7 @@ export const formatEntityIdToDeviceName = (entityId) => {
 };
 
 interface DeviceConstructor {
-    new(plugin: HomeAssistantPlugin, nativeId: string, entityId: string): HaBaseDevice;
+    new(plugin: HomeAssistantPlugin, nativeId: string, entity: HaEntityData): HaBaseDevice;
 }
 
 interface DomainMetadata {
@@ -114,8 +125,48 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
             ScryptedInterface.Thermometer,
             ScryptedInterface.TemperatureSetting,
             ScryptedInterface.OnOff,
+            ScryptedInterface.Settings,
         ],
         nativeIdPrefix: 'haClimate',
         deviceConstructor: HaClimate
     },
-}; 
+    [HaDomain.Sensor]: undefined,
+};
+
+export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
+    const isTemperatureSensor = entity.attributes.device_class === 'temperature' && entity.attributes.state_class === 'measurement';
+    const isHumiditySensor = entity.attributes.device_class === 'humidity' && entity.attributes.state_class === 'measurement';
+
+    let domainMetadata: DomainMetadata;
+    if (isTemperatureSensor) {
+        domainMetadata = {
+            type: ScryptedDeviceType.Thermostat,
+            interfaces: [ScryptedInterface.Thermometer],
+            nativeIdPrefix: 'haClimate',
+            deviceConstructor: HaClimate,
+        }
+    } else if (isHumiditySensor) {
+        domainMetadata = {
+            type: ScryptedDeviceType.Thermostat,
+            interfaces: [ScryptedInterface.HumiditySensor],
+            nativeIdPrefix: 'haClimate',
+            deviceConstructor: HaClimate,
+        }
+    }
+
+    if (!entity.attributes.unit_of_measurement) {
+        domainMetadata.interfaces.push(ScryptedInterface.Settings);
+    }
+
+    return domainMetadata;
+}
+
+export const getDomainMetadata = (entityData: HaEntityData) => {
+    const domain = entityData.entity_id.split('.')[0] as HaDomain;
+
+    if (domain === HaDomain.Sensor) {
+        return mapSensorEntity(entityData);
+    } else {
+        return domainMetadataMap[domain];
+    }
+}

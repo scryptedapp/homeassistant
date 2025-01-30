@@ -10,7 +10,7 @@ import { HaDevice } from './device';
 import { httpsAgent } from './httpsagent';
 import { NotifyService } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
-import { domainMetadataMap, formatEntityIdToDeviceName, HaEntityData, supportedDomains } from './utils';
+import { domainMetadataMap, formatEntityIdToDeviceName, getDomainMetadata, HaEntityData, supportedDomains } from './utils';
 import { HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
 
@@ -26,6 +26,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     connection: any;
     processing: boolean;
     deviceMap: Record<string, HaBaseDevice> = {};
+    entitiesMap: Record<string, HaEntityData> = {};
 
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
@@ -180,20 +181,23 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             devices: [],
         };
 
-        for (const entity of this.storageSettings.values.entitiesToFetch) {
-            const [domain, entityId] = entity.split('.');
-            const deviceName = formatEntityIdToDeviceName(entityId);
+        for (const entityId of this.storageSettings.values.entitiesToFetch) {
+            const entityData = this.entitiesMap[entityId];
+            if (entityData) {
+                const deviceName = entityData.attributes.friendly_name;
 
-            const domainMetadata = domainMetadataMap[domain];
+                const domainMetadata = getDomainMetadata(entityData);
 
-            if (domainMetadata) {
-                const { interfaces, nativeIdPrefix, type } = domainMetadata;
-                devicesManifest.devices.push({
-                    nativeId: `${nativeIdPrefix}:${entity}`,
-                    name: deviceName,
-                    interfaces,
-                    type,
-                });
+                if (domainMetadata) {
+                    const { interfaces, nativeIdPrefix, type } = domainMetadata;
+                    devicesManifest.devices.push({
+                        providerNativeId: devicesPrefix,
+                        nativeId: `${nativeIdPrefix}:${entityId}`,
+                        name: deviceName,
+                        interfaces,
+                        type: type as ScryptedDeviceType,
+                    });
+                }
             }
         }
 
@@ -201,16 +205,21 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async fetchAvailableEntities() {
-        const response = await axios.get(new URL('states', this.getApiUrl()).toString(), {
+        this.entitiesMap = {};
+        const response = await axios.get<HaEntityData[]>(new URL('states', this.getApiUrl()).toString(), {
             headers: this.getHeaders(),
             httpsAgent,
         });
 
-        const entityIds =
+        const filteredEntities =
             response.data
-                .filter(entityStatus => supportedDomains.some(domain => (entityStatus.entity_id as string).startsWith(domain)))
-                .map(entityStatus => entityStatus.entity_id);
+                .filter(entityStatus => supportedDomains.some(domain => (entityStatus.entity_id as string).startsWith(domain)));
 
+        for (const entity of filteredEntities) {
+            this.entitiesMap[entity.entity_id] = entity;
+        }
+
+        const entityIds = filteredEntities.map(entityStatus => entityStatus.entity_id).sort();
         this.console.log('Entity IDs found:', entityIds);
 
         this.storageSettings.settings.entitiesToFetch.choices = entityIds;
@@ -219,22 +228,29 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     async startEntitiesSync() {
         if (this.connection) {
             subscribeEntities(this.connection, (entities: Record<string, HaEntityData>) => {
-                this.processing = true;
+                if (!this.processing) {
+                    try {
+                        this.processing = true;
 
-                const filteredEntities = Object.entries(entities)
-                    .filter(([entityId,]) => this.storageSettings.values.entitiesToFetch.includes(entityId))
-                    .map(([_, data]) => data);
+                        const filteredEntities = Object.entries(entities)
+                            .filter(([entityId,]) => this.storageSettings.values.entitiesToFetch.includes(entityId))
+                            .map(([_, data]) => data);
 
-                for (const entity of filteredEntities) {
-                    const { entity_id } = entity;
-                    const device = this.deviceMap[entity_id];
+                        for (const entity of filteredEntities) {
+                            const { entity_id } = entity;
+                            const device = this.deviceMap[entity_id];
 
-                    if (device) {
-                        device.updateState(entity);
+                            if (device) {
+                                device.updateState(entity);
+                            }
+                        }
+
+                    } catch (e) {
+                        this.console.log('Error in subscribeEntities', e);
+                    } finally {
+                        this.processing = false;
                     }
                 }
-
-                this.processing = false;
             });
         }
     }
@@ -244,8 +260,6 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         await this.fetchAvailableEntities();
         await this.syncDevices();
         await this.startEntitiesSync();
-
-
     }
 }
 

@@ -107,6 +107,31 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     async releaseDevice(id: string, nativeId: string): Promise<void> {
     }
 
+    async getEntityDeviceInfo(entityId: string) {
+        const payload = {
+            template: `{{device_attr('${entityId}','manufacturer')}}||{{device_attr('${entityId}','model')}}`
+        };
+
+        const response = await axios.post(new URL('template', this.getApiUrl()).toString(), payload, {
+            headers: this.getHeaders(),
+            httpsAgent,
+        });
+
+        const data = response.data ?? 'None,None';
+        let [manufacturer, model] = data.split('||');
+        if (!manufacturer || manufacturer === 'None') {
+            manufacturer = 'Homeassistant';
+        }
+        if (!model || model === 'None') {
+            model = undefined;
+        }
+
+        return {
+            manufacturer,
+            model,
+        }
+    }
+
     async connectWs() {
         if (this.connection) {
             this.connection.close();
@@ -182,22 +207,26 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         };
 
         for (const entityId of this.storageSettings.values.entitiesToFetch) {
-            const entityData = this.entitiesMap[entityId];
-            if (entityData) {
-                const deviceName = entityData.attributes.friendly_name;
+            const { manufacturer, model } = await this.getEntityDeviceInfo(entityId);
+            const entityData: HaEntityData = this.entitiesMap[entityId] ??
+                { entity_id: entityId, state: undefined, attributes: { friendly_name: formatEntityIdToDeviceName(entityId) } };
+            const deviceName = entityData.attributes.friendly_name;
 
-                const domainMetadata = getDomainMetadata(entityData);
+            const domainMetadata = getDomainMetadata(entityData);
 
-                if (domainMetadata) {
-                    const { interfaces, nativeIdPrefix, type } = domainMetadata;
-                    devicesManifest.devices.push({
-                        providerNativeId: devicesPrefix,
-                        nativeId: `${nativeIdPrefix}:${entityId}`,
-                        name: deviceName,
-                        interfaces,
-                        type: type as ScryptedDeviceType,
-                    });
-                }
+            if (domainMetadata) {
+                const { interfaces, nativeIdPrefix, type } = domainMetadata;
+                devicesManifest.devices.push({
+                    providerNativeId: devicesPrefix,
+                    nativeId: `${nativeIdPrefix}:${entityId}`,
+                    name: deviceName,
+                    interfaces,
+                    type: type as ScryptedDeviceType,
+                    info: {
+                        manufacturer,
+                        model
+                    }
+                });
             }
         }
 

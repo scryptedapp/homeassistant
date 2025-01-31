@@ -25,17 +25,17 @@ export enum HaDomain {
 }
 
 interface Attributes {
-    device_class: string;
+    device_class?: string;
     friendly_name: string;
-    unit_of_measurement: string;
-    state_class: string;
-    current_temperature: number;
-    current_position: number;
+    unit_of_measurement?: string;
+    state_class?: string;
+    current_temperature?: number;
+    current_position?: number;
 }
 
 export interface HaEntityData<TState extends string = string> {
     entity_id: string;
-    state: TState;
+    state?: TState;
     attributes: Attributes
 }
 

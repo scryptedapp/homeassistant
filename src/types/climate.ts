@@ -1,4 +1,4 @@
-import { HaDomain, HaEntityData } from "../utils";
+import { getSensorType, HaDomain, HaEntityData } from "../utils";
 import { HaBaseDevice } from "./baseDevice";
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import type HomeAssistantPlugin from "../main";
@@ -87,8 +87,13 @@ export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureS
 
     updateState(entityData: HaEntityData) {
         const { attributes, state } = entityData;
-        this.temperature = entityData.entity_id.startsWith('climate.') ? attributes.current_temperature :
-            state ? Number(state) :
-                undefined;
+        const { isHumiditySensor, isTemperatureSensor } = getSensorType(entityData);
+        if (entityData.entity_id.startsWith('climate.')) {
+            this.temperature = attributes.current_temperature;
+        } else if (isHumiditySensor) {
+            this.humidity = state ? Number(state) : undefined
+        } else if (isTemperatureSensor) {
+            this.temperature = state ? Number(state) : undefined
+        }
     }
 }

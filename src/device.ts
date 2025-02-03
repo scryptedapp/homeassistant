@@ -8,7 +8,7 @@ export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
         super(nativeId);
     }
 
-    async getDevice(nativeId: string): Promise<any> {
+    getDeviceInternal(nativeId: string) {
         try {
             const entityId = nativeId.split(':')[1];
             const entityData = this.plugin.entitiesMap[entityId];
@@ -27,6 +27,14 @@ export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
                     return device;
                 }
             }
+        } catch (e) {
+            this.console.log('Error in device getDeviceInternal', e);
+        }
+    }
+
+    async getDevice(nativeId: string): Promise<any> {
+        try {
+            return this.getDeviceInternal(nativeId);
         } catch (e) {
             this.console.log('Error in device getDevice', e);
         }

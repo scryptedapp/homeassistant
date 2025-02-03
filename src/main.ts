@@ -293,7 +293,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                             let device = this.deviceMap[entity_id];
 
                             if (!device) {
-                                device = await this.devicesProvider.getDevice(this.buildNativeId(entity))
+                                device = this.devicesProvider.getDeviceInternal(this.buildNativeId(entity));
                             }
                             if (device) {
                                 device.updateState(entity);

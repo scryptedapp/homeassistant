@@ -10,7 +10,7 @@ import { HaDevice } from './device';
 import { httpsAgent } from './httpsagent';
 import { NotifyService } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
-import { domainMetadataMap, formatEntityIdToDeviceName, getDomainMetadata, HaEntityData, supportedDomains } from './utils';
+import { formatEntityIdToDeviceName, getDomainMetadata, HaEntityData, supportedDomains } from './utils';
 import { HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
 
@@ -27,6 +27,8 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     processing: boolean;
     deviceMap: Record<string, HaBaseDevice> = {};
     entitiesMap: Record<string, HaEntityData> = {};
+    notifiersProvider: NotifyService;
+    devicesProvider: HaDevice;
 
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
@@ -96,12 +98,26 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async getDevice(nativeId: string): Promise<any> {
-        if (nativeId === notifyPrefix)
-            return new NotifyService(this, notifyPrefix);
+        if (nativeId === notifyPrefix) {
+            if (this.notifiersProvider) {
+                return this.notifiersProvider;
+            }
+
+            const ret = new NotifyService(this, notifyPrefix);
+            this.notifiersProvider = ret;
+            return ret;
+        }
 
         if (nativeId === devicesPrefix) {
-            return new HaDevice(this, devicesPrefix);
+            if (this.devicesProvider) {
+                return this.devicesProvider;
+            }
+
+            const ret = new HaDevice(this, devicesPrefix);
+            this.devicesProvider = ret;
+            return ret;
         }
+
     }
 
     async releaseDevice(id: string, nativeId: string): Promise<void> {
@@ -147,6 +163,13 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         } catch (e) {
             this.console.error('Error in WS subscription', e);
         }
+    }
+
+    buildNativeId(entityData: HaEntityData) {
+        const domainMetadata = getDomainMetadata(entityData);
+        const { nativeIdPrefix } = domainMetadata;
+        const { entity_id } = entityData;
+        return `${nativeIdPrefix}:${entity_id}`
     }
 
     async syncDevices() {
@@ -215,10 +238,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             const domainMetadata = getDomainMetadata(entityData);
 
             if (domainMetadata) {
-                const { interfaces, nativeIdPrefix, type } = domainMetadata;
+                const { interfaces, type } = domainMetadata;
                 devicesManifest.devices.push({
                     providerNativeId: devicesPrefix,
-                    nativeId: `${nativeIdPrefix}:${entityId}`,
+                    nativeId: this.buildNativeId(entityData),
                     name: deviceName,
                     interfaces,
                     type: type as ScryptedDeviceType,
@@ -256,7 +279,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     async startEntitiesSync() {
         if (this.connection) {
-            subscribeEntities(this.connection, (entities: Record<string, HaEntityData>) => {
+            subscribeEntities(this.connection, async (entities: Record<string, HaEntityData>) => {
                 if (!this.processing) {
                     try {
                         this.processing = true;
@@ -267,8 +290,11 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
                         for (const entity of filteredEntities) {
                             const { entity_id } = entity;
-                            const device = this.deviceMap[entity_id];
+                            let device = this.deviceMap[entity_id];
 
+                            if (!device) {
+                                device = await this.devicesProvider.getDevice(this.buildNativeId(entity))
+                            }
                             if (device) {
                                 device.updateState(entity);
                             }

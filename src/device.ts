@@ -1,6 +1,7 @@
 import { DeviceProvider, ScryptedDeviceBase } from "@scrypted/sdk";
 import type HomeAssistantPlugin from "./main";
-import { domainMetadataMap, getDomainMetadata, HaDomain, mapSensorEntity } from "./utils";
+import { getDomainMetadata } from "./utils";
+import { HaBaseDevice } from "./types/baseDevice";
 
 export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
     constructor(public plugin: HomeAssistantPlugin, nativeId: string) {
@@ -11,6 +12,10 @@ export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
         try {
             const entityId = nativeId.split(':')[1];
             const entityData = this.plugin.entitiesMap[entityId];
+
+            if (this.plugin.deviceMap[entityId]) {
+                return this.plugin.deviceMap[entityId];
+            }
 
             if (entityData) {
                 const DeviceConstructor = getDomainMetadata(entityData)?.deviceConstructor;

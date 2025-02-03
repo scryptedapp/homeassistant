@@ -1,16 +1,21 @@
 import { DeviceProvider, ScryptedDeviceBase } from "@scrypted/sdk";
 import type HomeAssistantPlugin from "./main";
-import { domainMetadataMap, getDomainMetadata, HaDomain, mapSensorEntity } from "./utils";
+import { getDomainMetadata } from "./utils";
+import { HaBaseDevice } from "./types/baseDevice";
 
 export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
     constructor(public plugin: HomeAssistantPlugin, nativeId: string) {
         super(nativeId);
     }
 
-    async getDevice(nativeId: string): Promise<any> {
+    getDeviceInternal(nativeId: string) {
         try {
             const entityId = nativeId.split(':')[1];
             const entityData = this.plugin.entitiesMap[entityId];
+
+            if (this.plugin.deviceMap[entityId]) {
+                return this.plugin.deviceMap[entityId];
+            }
 
             if (entityData) {
                 const DeviceConstructor = getDomainMetadata(entityData)?.deviceConstructor;
@@ -22,6 +27,14 @@ export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
                     return device;
                 }
             }
+        } catch (e) {
+            this.console.log('Error in device getDeviceInternal', e);
+        }
+    }
+
+    async getDevice(nativeId: string): Promise<any> {
+        try {
+            return this.getDeviceInternal(nativeId);
         } catch (e) {
             this.console.log('Error in device getDevice', e);
         }

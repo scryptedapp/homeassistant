@@ -1,7 +1,6 @@
 import { DeviceProvider, ScryptedDeviceBase } from "@scrypted/sdk";
 import type HomeAssistantPlugin from "./main";
 import { getDomainMetadata } from "./utils";
-import { HaBaseDevice } from "./types/baseDevice";
 
 export class HaDevice extends ScryptedDeviceBase implements DeviceProvider {
     constructor(public plugin: HomeAssistantPlugin, nativeId: string) {

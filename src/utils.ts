@@ -161,7 +161,7 @@ export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
         }
     }
 
-    if (!entity.attributes.unit_of_measurement) {
+    if (domainMetadata && !entity.attributes.unit_of_measurement) {
         domainMetadata.interfaces.push(ScryptedInterface.Settings);
     }
 
@@ -172,7 +172,12 @@ export const getDomainMetadata = (entityData: HaEntityData) => {
     const domain = entityData.entity_id.split('.')[0] as HaDomain;
 
     if (domain === HaDomain.Sensor) {
-        return mapSensorEntity(entityData);
+        const metadata = mapSensorEntity(entityData);
+        if (!metadata) {
+            console.log(`Entity not supported: ${entityData}`);
+        }
+
+        return metadata;
     } else {
         return domainMetadataMap[domain];
     }

@@ -167,9 +167,12 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     buildNativeId(entityData: HaEntityData) {
         const domainMetadata = getDomainMetadata(entityData);
-        const { nativeIdPrefix } = domainMetadata;
-        const { entity_id } = entityData;
-        return `${nativeIdPrefix}:${entity_id}`
+
+        if (domainMetadata) {
+            const { nativeIdPrefix } = domainMetadata;
+            const { entity_id } = entityData;
+            return `${nativeIdPrefix}:${entity_id}`
+        }
     }
 
     async syncDevices() {
@@ -293,8 +296,12 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                             let device = this.deviceMap[entity_id];
 
                             if (!device) {
-                                device = this.devicesProvider.getDeviceInternal(this.buildNativeId(entity));
+                                const nativeId = this.buildNativeId(entity);
+                                if (nativeId) {
+                                    device = this.devicesProvider.getDeviceInternal(nativeId);
+                                }
                             }
+
                             if (device) {
                                 device.updateState(entity);
                             }

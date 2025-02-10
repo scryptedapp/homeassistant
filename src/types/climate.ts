@@ -14,9 +14,14 @@ enum HaClimateState {
     Heat = 'heat',
 }
 
-const haToScryptedUnit: Record<string, TemperatureUnit> = {
-    '°C': TemperatureUnit.C,
-    '°F': TemperatureUnit.F,
+enum HomeassistantTemperatureUnit {
+    C = '°C',
+    F = '°F',
+}
+
+const haToScryptedUnit: Record<HomeassistantTemperatureUnit, TemperatureUnit> = {
+    [HomeassistantTemperatureUnit.C]: TemperatureUnit.C,
+    [HomeassistantTemperatureUnit.F]: TemperatureUnit.F,
 }
 
 const haToScryptedStateMap: Record<HaClimateState, ThermostatMode> = {
@@ -85,15 +90,28 @@ export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureS
         return;
     }
 
+    convertTemperature(temperature: string | number | undefined, unit: string) {
+        if (temperature === undefined) {
+            return undefined;
+        }
+
+        const temperatureNumber = Number(temperature);
+        if (unit === HomeassistantTemperatureUnit.F) {
+            return (temperatureNumber - 32) / 1.8;
+        } else {
+            return temperatureNumber;
+        }
+    }
+
     updateState(entityData: HaEntityData) {
         const { attributes, state } = entityData;
         const { isHumiditySensor, isTemperatureSensor } = getSensorType(entityData);
         if (entityData.entity_id.startsWith('climate.')) {
-            this.temperature = attributes.current_temperature;
+            this.temperature = this.convertTemperature(entityData.state, entityData.attributes.unit_of_measurement);
         } else if (isHumiditySensor) {
             this.humidity = state ? Number(state) : undefined
         } else if (isTemperatureSensor) {
-            this.temperature = state ? Number(state) : undefined
+            this.temperature = this.convertTemperature(entityData.state, entityData.attributes.unit_of_measurement);
         }
     }
 }

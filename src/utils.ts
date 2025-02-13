@@ -22,6 +22,7 @@ export enum HaDomain {
     Cover = 'cover',
     Climate = 'climate',
     Sensor = 'sensor',
+    Device = 'device',
 }
 
 interface Attributes {
@@ -128,6 +129,15 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
             ScryptedInterface.Settings,
         ],
         nativeIdPrefix: 'haClimate',
+        deviceConstructor: HaClimate
+    },
+    [HaDomain.Device]: {
+        type: ScryptedDeviceType.Program,
+        interfaces: [
+            ScryptedInterface.Sensors,
+            ScryptedInterface.Settings,
+        ],
+        nativeIdPrefix: 'haDevice',
         deviceConstructor: HaClimate
     },
     [HaDomain.Sensor]: undefined,

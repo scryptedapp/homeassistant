@@ -64,29 +64,30 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
             data.channel += "_" + options.android.channel
 
         if (options?.data?.ha)
-            Object.assign(data, options.data.ha)
+            Object.assign(data, options.data.ha);
 
         this.console.log('ha notification payload', data);
 
-        try {
-            const response = await axios.post(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()).toString(),
-                {
-                    title,
-                    message: options.body,
-                    data,
-                },
-                {
-                    responseType: 'json',
-                    headers: this.plugin.getHeaders(),
-                    httpsAgent,
-                }
-            );
-    
-            this.console.log('notification result', response.status, response.statusText);
-            this.console.log('notification sent', response.data);
-        } catch (e) {
-            this.console.log('Error in HA notification', e);
+        if (options?.critical) {
+            data.push ||= {};
+            data.push['interruption-level'] = 'critical';
         }
+
+        const response = await axios.post(new URL(`services/${this.nativeId.replace(':', '/')}`, this.plugin.getApiUrl()).toString(),
+            {
+                title,
+                message: options?.body || '',
+                data,
+            },
+            {
+                responseType: 'json',
+                headers: this.plugin.getHeaders(),
+                httpsAgent,
+            }
+        );
+
+        this.console.log('notification result', response.status, response.statusText);
+        this.console.log('notification sent', response.data);
     }
 }
 

@@ -10,7 +10,7 @@ import { HaDevice } from './device';
 import { httpsAgent } from './httpsagent';
 import { NotifyService } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
-import { formatEntityIdToDeviceName, getDomainMetadata, HaEntityData, supportedDomains } from './utils';
+import { deviceNativeIdPrefix, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, supportedDomains } from './utils';
 import { HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
 
@@ -27,6 +27,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     processing: boolean;
     deviceMap: Record<string, HaBaseDevice> = {};
     entitiesMap: Record<string, HaEntityData> = {};
+    devicesMap: Record<string, HaDeviceData> = {};
+    entityNameToIdMap: Record<string, string> = {};
+    // Entities can belong to only 1 device
+    entityIdDeviceIdMap: Record<string, string> = {};
     notifiersProvider: NotifyService;
     devicesProvider: HaDevice;
 
@@ -59,6 +63,16 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         },
         entitiesToFetch: {
             title: 'Entities to fetch',
+            multiple: true,
+            choices: [],
+            combobox: true,
+            defaultValue: [],
+            onPut: () => {
+                this.sync();
+            }
+        },
+        devicesToFetch: {
+            title: 'Devices to fetch',
             multiple: true,
             choices: [],
             combobox: true,
@@ -175,6 +189,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         }
     }
 
+    buildDeviceNativeId(deviceId: string) {
+        return `${deviceNativeIdPrefix}:${deviceId}`
+    }
+
     async syncDevices() {
         const response = await axios.get(new URL('services', this.getApiUrl()).toString(), {
             headers: this.getHeaders(),
@@ -256,6 +274,36 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             }
         }
 
+        for (const deviceName of this.storageSettings.values.devicesToFetch) {
+            try {
+                const deviceData = this.devicesMap[this.entityNameToIdMap[deviceName]];
+                if (deviceData) {
+                    const { name, deviceId, entityIds } = deviceData;
+                    const { manufacturer, model } = await this.getEntityDeviceInfo(deviceId);
+
+                    for (const entityId of entityIds) {
+                        this.entityIdDeviceIdMap[entityId] = deviceId;
+                    }
+
+                    devicesManifest.devices.push({
+                        providerNativeId: devicesPrefix,
+                        nativeId: this.buildDeviceNativeId(deviceId),
+                        name,
+                        interfaces: [ScryptedInterface.Sensors, ScryptedInterface.Settings],
+                        type: ScryptedDeviceType.Sensor,
+                        info: {
+                            manufacturer,
+                            model
+                        }
+                    });
+                } else {
+                    this.console.log(`Device data for ${deviceName} not found`);
+                }
+            } catch (e) {
+                this.console.log(`Error discovering device ${deviceName}`, e);
+            }
+        }
+
         await sdk.deviceManager.onDevicesChanged(devicesManifest);
     }
 
@@ -280,6 +328,62 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         this.storageSettings.settings.entitiesToFetch.choices = entityIds;
     }
 
+    async fetchAvailableDevices() {
+        try {
+            this.devicesMap = {};
+            this.entityNameToIdMap = {};
+            const names: string[] = [];
+            const response = await axios.post<string>(new URL('template', this.getApiUrl()).toString(),
+                {
+                    "template": "{{ states | map(attribute='entity_id') | map('device_id') | unique | reject('eq',None) | list }}"
+                },
+                {
+                    headers: this.getHeaders(),
+                    httpsAgent,
+                }
+            );
+            const deviceIds: string[] = JSON.parse(response.data.replaceAll("'", '"'));
+
+            for (const deviceId of deviceIds) {
+                const deviceNameResponse = await axios.post<string>(new URL('template', this.getApiUrl()).toString(),
+                    {
+                        "template": `{{ device_attr('${deviceId}', 'name') }}`
+                    },
+                    {
+                        headers: this.getHeaders(),
+                        httpsAgent,
+                    }
+                );
+                const deviceEntitiesResponse = await axios.post<string>(new URL('template', this.getApiUrl()).toString(),
+                    {
+                        "template": `{{ device_entities('${deviceId}') }}`
+                    },
+                    {
+                        headers: this.getHeaders(),
+                        httpsAgent,
+                    }
+                );
+
+                const name = deviceNameResponse.data;
+                if (name && !names.includes(name)) {
+                    names.push(name);
+                    this.entityNameToIdMap[name] = deviceId;
+                    this.devicesMap[deviceId] = {
+                        deviceId,
+                        name,
+                        entityIds: JSON.parse(deviceEntitiesResponse.data.replaceAll("'", '"'))
+                    }
+                }
+            }
+
+            this.console.log(`Devices found: ${JSON.stringify(names)}`);
+
+            this.storageSettings.settings.devicesToFetch.choices = names.sort();
+        } catch (e) {
+            this.console.log('Error in fetchAvailableDevices', e);
+        }
+    }
+
     async startEntitiesSync() {
         if (this.connection) {
             subscribeEntities(this.connection, async (entities: Record<string, HaEntityData>) => {
@@ -287,23 +391,40 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                     try {
                         this.processing = true;
 
-                        const filteredEntities = Object.entries(entities)
-                            .filter(([entityId,]) => this.storageSettings.values.entitiesToFetch.includes(entityId))
-                            .map(([_, data]) => data);
-
-                        for (const entity of filteredEntities) {
+                        for (const entity of Object.values(entities)) {
                             const { entity_id } = entity;
-                            let device = this.deviceMap[entity_id];
 
-                            if (!device) {
-                                const nativeId = this.buildNativeId(entity);
-                                if (nativeId) {
-                                    device = this.devicesProvider.getDeviceInternal(nativeId);
+                            // Check if the entity is ingesteded as Device standalone
+                            if (this.storageSettings.values.entitiesToFetch.includes(entity_id)) {
+                                let device = this.deviceMap[entity_id];
+
+                                if (!device) {
+                                    const nativeId = this.buildNativeId(entity);
+                                    if (nativeId) {
+                                        device = this.devicesProvider.getDeviceInternal(nativeId);
+                                    }
+                                }
+
+                                if (device) {
+                                    device.updateState(entity);
                                 }
                             }
 
-                            if (device) {
-                                device.updateState(entity);
+                            // Check if the entity is ingesteded as Sensors device
+                            const deviceId = this.entityIdDeviceIdMap[entity_id];
+                            if (deviceId) {
+                                let device = this.deviceMap[entity_id];
+
+                                if (!device) {
+                                    const nativeId = this.buildDeviceNativeId(deviceId);
+                                    if (nativeId) {
+                                        device = this.devicesProvider.getDeviceInternal(nativeId);
+                                    }
+                                }
+
+                                if (device) {
+                                    device.updateState(entity);
+                                }
                             }
                         }
 
@@ -319,6 +440,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     async sync() {
         await this.connectWs();
+        await this.fetchAvailableDevices();
         await this.fetchAvailableEntities();
         await this.syncDevices();
         await this.startEntitiesSync();

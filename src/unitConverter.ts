@@ -129,14 +129,14 @@ export class UnitConverter {
             unitSrc = UnitConverter.UNITS_MAP[Unit.NONE];
         }
 
-        const dfUnit =
+        const unit =
             typeof unitSrc === 'string' ? unitSrc : unitSrc.unit;
 
-        const unitData = UnitConverter.UNITS_MAP?.[dfUnit];
+        const unitData = UnitConverter.UNITS_MAP?.[unit];
         if (!unitData) {
             return {
                 factor: 1,
-                unit: dfUnit as Unit,
+                unit: unit as Unit,
                 unitGroup: UnitGroup.None,
             };
         } else {
@@ -175,9 +175,9 @@ export class UnitConverter {
 
     static localToSi(
         localValue: number,
-        dfUnit: UnitData | Unit | undefined,
+        unit: UnitData | Unit | undefined,
     ) {
-        const unitData = UnitConverter.getUnit(dfUnit);
+        const unitData = UnitConverter.getUnit(unit);
 
         if (!unitData) {
             return localValue;

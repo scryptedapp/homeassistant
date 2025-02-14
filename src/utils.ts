@@ -34,6 +34,14 @@ interface Attributes {
     current_position?: number;
 }
 
+export interface HaDeviceData {
+    deviceId: string;
+    entityIds: string[];
+    name: string;
+}
+
+export const deviceNativeIdPrefix = 'haDevice';
+
 export interface HaEntityData<TState extends string = string> {
     entity_id: string;
     state?: TState;
@@ -131,15 +139,7 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         nativeIdPrefix: 'haClimate',
         deviceConstructor: HaClimate
     },
-    [HaDomain.Device]: {
-        type: ScryptedDeviceType.Program,
-        interfaces: [
-            ScryptedInterface.Sensors,
-            ScryptedInterface.Settings,
-        ],
-        nativeIdPrefix: 'haDevice',
-        deviceConstructor: HaClimate
-    },
+    [HaDomain.Device]: undefined,
     [HaDomain.Sensor]: undefined,
 };
 
@@ -184,7 +184,7 @@ export const getDomainMetadata = (entityData: HaEntityData) => {
     if (domain === HaDomain.Sensor) {
         const metadata = mapSensorEntity(entityData);
         if (!metadata) {
-            console.log(`Entity not supported: ${entityData}`);
+            console.log(`Entity not supported: ${entityData.entity_id}, ${JSON.stringify(entityData)}`);
         }
 
         return metadata;

@@ -6,15 +6,18 @@ import { httpsAgent } from "../httpsagent";
 
 export class HaBaseDevice extends ScryptedDeviceBase {
     agent = httpsAgent;
-    defaultPayload: object = {
+    defaultPayload: object = this.entity ? {
         entity_id: this.entity.entity_id
-    };
+    } : undefined;
 
     constructor(public plugin: HomeAssistantPlugin, nativeId: string, public entity: HaEntityData) {
         super(nativeId);
     }
 
     updateState(entityData: HaEntityData) {
+    }
+
+    refreshConfiguration() {
     }
 
     getActionFn(serviceUrl: string, payload = this.defaultPayload) {

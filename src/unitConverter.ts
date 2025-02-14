@@ -123,14 +123,14 @@ export class UnitConverter {
     }
 
     static getUnit(
-        dfUnitSrc: UnitData | Unit | string | undefined,
+        unitSrc: UnitData | Unit | string | undefined,
     ): UnitData {
-        if (!dfUnitSrc) {
-            dfUnitSrc = UnitConverter.UNITS_MAP[Unit.NONE];
+        if (!unitSrc) {
+            unitSrc = UnitConverter.UNITS_MAP[Unit.NONE];
         }
 
         const dfUnit =
-            typeof dfUnitSrc === 'string' ? dfUnitSrc : dfUnitSrc.unit;
+            typeof unitSrc === 'string' ? unitSrc : unitSrc.unit;
 
         const unitData = UnitConverter.UNITS_MAP?.[dfUnit];
         if (!unitData) {
@@ -146,13 +146,13 @@ export class UnitConverter {
 
     static siToLocal(
         siValue: number,
-        dfUnit: UnitData | Unit | undefined,
+        unit: UnitData | Unit | undefined,
     ) {
         if (isNaN(siValue)) {
             return 0;
         }
 
-        const unitData = UnitConverter.getUnit(dfUnit);
+        const unitData = UnitConverter.getUnit(unit);
 
         if (!unitData) {
             return siValue;

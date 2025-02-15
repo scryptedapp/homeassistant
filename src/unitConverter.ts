@@ -199,12 +199,12 @@ export class UnitConverter {
     }
 
     static getUnits(
-        unit: UnitData | Unit | string | undefined,
+        unit: Unit | string | undefined,
     ) {
-        const unitData = UnitConverter.getUnit(unit);
+        const unitData = UnitConverter.UNITS_MAP[unit];
 
         if (!unitData) {
-            return [];
+            return [unit];
         }
 
         const { unitGroup } = unitData;

@@ -197,4 +197,21 @@ export class UnitConverter {
             return 0;
         }
     }
+
+    static getUnits(
+        unit: UnitData | Unit | string | undefined,
+    ) {
+        const unitData = UnitConverter.getUnit(unit);
+
+        if (!unitData) {
+            return [];
+        }
+
+        const { unitGroup } = unitData;
+
+        return Object.values(UnitConverter.UNITS_MAP)
+            .filter(unit => unit.unitGroup === unitGroup && unit.unit)
+            ?.map(unit => unit.unit);
+
+    }
 }

@@ -34,7 +34,7 @@ export class HaCover extends HaBaseDevice implements Entry, EntrySensor, Setting
         return this.storageSettings.putSetting(key, value);
     }
 
-    updateState(entityData: HaEntityData<HaCoverState>) {
+    async updateState(entityData: HaEntityData<HaCoverState>) {
         const { attributes, state } = entityData;
         this.coverState = state;
 

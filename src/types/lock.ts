@@ -15,7 +15,7 @@ const haToScryptedStateMap: Record<HaLockState, LockState> = {
 }
 
 export class HaLock extends HaBaseDevice implements Lock {
-    updateState(entityData: HaEntityData<HaLockState>) {
+    async updateState(entityData: HaEntityData<HaLockState>) {
         const { state } = entityData;
 
         if (Object.values(HaLockState).includes(state)) {

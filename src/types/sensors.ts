@@ -1,4 +1,4 @@
-import { Settings, Sensors, Setting, SettingValue } from "@scrypted/sdk";
+import { Settings, Sensors, Setting, SettingValue, ScryptedInterface, Sensor } from "@scrypted/sdk";
 import HomeAssistantPlugin from "../main";
 import { HaEntityData } from "../utils";
 import { HaBaseDevice } from "./baseDevice";
@@ -43,7 +43,7 @@ export class HaSensors extends HaBaseDevice implements Sensors, Settings {
         return this.storageSettings.putSetting(key, value);
     }
 
-    updateState(entityData: HaEntityData) {
+    async updateState(entityData: HaEntityData) {
         if (!this.sensors) {
             this.sensors = {};
         }
@@ -59,10 +59,20 @@ export class HaSensors extends HaBaseDevice implements Sensors, Settings {
             value = UnitConverter.localToSi(numericValue, unit);
         }
 
-        this.sensors[entity_id] = {
+        const updatedSensorData: Sensor = {
             name: friendly_name,
             unit,
             value
+        };
+
+        const currentValue = this.sensors[entity_id];
+        if (currentValue?.value !== value) {
+            this.sensors = {
+                ...this.sensors,
+                [entity_id]: updatedSensorData
+            };
+
+            await this.onDeviceEvent(entity_id, updatedSensorData);
         }
     }
 }

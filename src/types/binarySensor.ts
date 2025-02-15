@@ -8,7 +8,7 @@ enum HaBinarySensorState {
 }
 
 export class HaBinarySensor extends HaBaseDevice implements BinarySensor {
-    updateState(entityData: HaEntityData<HaBinarySensorState>) {
+    async updateState(entityData: HaEntityData<HaBinarySensorState>) {
         const { state } = entityData;
 
         if (Object.values(HaBinarySensorState).includes(state)) {

@@ -17,7 +17,7 @@ const haToScryptedStateMap: Record<HaAlarmControlPanelState, SecuritySystemMode>
 }
 
 export class HaSecuritySystem extends HaBaseDevice implements SecuritySystem {
-    updateState(entityData: HaEntityData<HaAlarmControlPanelState>) {
+    async updateState(entityData: HaEntityData<HaAlarmControlPanelState>) {
         const { state } = entityData;
 
         if (Object.values(HaAlarmControlPanelState).includes(state)) {

@@ -103,7 +103,7 @@ export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureS
         }
     }
 
-    updateState(entityData: HaEntityData) {
+    async updateState(entityData: HaEntityData) {
         const { attributes, state } = entityData;
         const { isHumiditySensor, isTemperatureSensor } = getSensorType(entityData);
         if (entityData.entity_id.startsWith('climate.')) {

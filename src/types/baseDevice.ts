@@ -14,7 +14,7 @@ export class HaBaseDevice extends ScryptedDeviceBase {
         super(nativeId);
     }
 
-    updateState(entityData: HaEntityData) {
+    async updateState(entityData: HaEntityData) {
     }
 
     refreshConfiguration() {

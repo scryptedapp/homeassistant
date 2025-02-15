@@ -406,7 +406,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                                 }
 
                                 if (device) {
-                                    device.updateState(entity);
+                                    await device.updateState(entity);
                                 }
                             }
 
@@ -423,7 +423,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                                 }
 
                                 if (device) {
-                                    device.updateState(entity);
+                                    await device.updateState(entity);
                                 }
                             }
                         }

@@ -8,7 +8,7 @@ enum HaLightState {
 }
 
 export class HaLight extends HaBaseDevice implements OnOff {
-    updateState(entityData: HaEntityData<HaLightState>) {
+    async updateState(entityData: HaEntityData<HaLightState>) {
         const { state } = entityData;
 
         if (Object.values(HaLightState).includes(state)) {

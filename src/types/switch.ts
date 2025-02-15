@@ -8,7 +8,7 @@ enum HaSwitchState {
 }
 
 export class HaSwitch extends HaBaseDevice implements OnOff {
-    updateState(entityData: HaEntityData<HaSwitchState>) {
+    async updateState(entityData: HaEntityData<HaSwitchState>) {
         const { state } = entityData;
 
         if (Object.values(HaSwitchState).includes(state)) {

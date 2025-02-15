@@ -413,7 +413,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                             // Check if the entity is ingesteded as Sensors device
                             const deviceId = this.entityIdDeviceIdMap[entity_id];
                             if (deviceId) {
-                                let device = this.deviceMap[entity_id];
+                                let device = this.deviceMap[deviceId];
 
                                 if (!device) {
                                     const nativeId = this.buildDeviceNativeId(deviceId);

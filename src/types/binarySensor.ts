@@ -1,4 +1,4 @@
-import { BinarySensor } from "@scrypted/sdk";
+import { BinarySensor, EntrySensor } from "@scrypted/sdk";
 import { HaBaseDevice } from "./baseDevice";
 import { HaEntityData } from "../utils";
 
@@ -7,11 +7,12 @@ enum HaBinarySensorState {
     Off = 'off'
 }
 
-export class HaBinarySensor extends HaBaseDevice implements BinarySensor {
+export class HaBinarySensor extends HaBaseDevice implements BinarySensor, EntrySensor {
     async updateState(entityData: HaEntityData<HaBinarySensorState>) {
-        const { state } = entityData;
-
-        if (Object.values(HaBinarySensorState).includes(state)) {
+        const { state, attributes } = entityData;
+        if (attributes && (attributes.device_class === 'door' || attributes.device_class === 'garage' || attributes.device_class === 'garage_door')) {
+            this.entryOpen = state === HaBinarySensorState.On;
+        } else {
             this.binaryState = state === HaBinarySensorState.On;
         }
     }

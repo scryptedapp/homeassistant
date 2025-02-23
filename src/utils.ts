@@ -178,17 +178,31 @@ export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
     return domainMetadata;
 }
 
+const doorSensorDeviceClasses = ['door', 'opening', 'garage', 'garage_door'];
+export function isDoorSensor(entity: HaEntityData): boolean {
+    return doorSensorDeviceClasses.includes(entity.attributes?.device_class || '');
+}
+
 export const getDomainMetadata = (entityData: HaEntityData) => {
     const domain = entityData.entity_id.split('.')[0] as HaDomain;
-
+    if (domain === HaDomain.BinarySensor) {
+        if (isDoorSensor(entityData)) {
+            return {
+                type: ScryptedDeviceType.Entry,
+                interfaces: [ScryptedInterface.EntrySensor],
+                nativeIdPrefix: 'haBinaryDoorSensor',
+                deviceConstructor: HaBinarySensor,
+            };
+        }
+        return domainMetadataMap[HaDomain.BinarySensor];
+    }
     if (domain === HaDomain.Sensor) {
         const metadata = mapSensorEntity(entityData);
         if (!metadata) {
             console.log(`Entity not supported: ${entityData.entity_id}, ${JSON.stringify(entityData)}`);
         }
-
         return metadata;
     } else {
         return domainMetadataMap[domain];
     }
-}
+};

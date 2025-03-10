@@ -397,20 +397,20 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 ...entitiesToFetch ?? [],
             ];
 
-            for (const deviceName of this.storageSettings.values.devicesToFetch) {
+            for (const deviceName of devicesToFetch) {
                 try {
                     const deviceData = this.devicesMap[this.entityNameToIdMap[deviceName]];
                     if (deviceData) {
-                        const { entityIds } = deviceData;
-                        entityIds.push(...(entityIds ?? []));
+                        const { entityIds: deviceEntityIds } = deviceData;
+                        entityIds.push(...(deviceEntityIds ?? []));
                     }
                 } catch { }
             }
 
             if (entityIds.length) {
-                this.console.log(`Subscribing to ${entityIds.length} entities`);
+                this.console.log(`Subscribing to ${entityIds.length} entities: ${JSON.stringify(entityIds)}`);
                 this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
-                    this.console.log(`Entities update received: ${entities}`);
+                    // this.console.log(`Entities update received: ${JSON.stringify(entities)}`);
                     try {
                         for (const entity of Object.values(entities)) {
                             const { entity_id } = entity;

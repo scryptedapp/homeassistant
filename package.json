@@ -1,6 +1,6 @@
 {
    "name": "@scrypted/homeassistant",
-   "version": "0.0.36",
+   "version": "0.0.37",
    "scripts": {
       "scrypted-setup-project": "scrypted-setup-project",
       "prescrypted-setup-project": "scrypted-package-json",

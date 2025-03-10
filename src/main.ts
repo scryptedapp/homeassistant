@@ -4,27 +4,28 @@ import axios from 'axios';
 import {
     createConnection,
     createLongLivedTokenAuth,
-    subscribeEntities,
 } from "home-assistant-js-websocket";
 import { HaDevice } from './device';
 import { httpsAgent } from './httpsagent';
 import { NotifyService } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
-import { deviceNativeIdPrefix, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, supportedDomains } from './utils';
+import { deviceNativeIdPrefix, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, subscribeEntities, supportedDomains } from './utils';
 import { HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
+import { sleep } from '../../scrypted/common/src/sleep';
 
 globalThis.WebSocket = HaWebsocket as any;
 
 const notifyPrefix = 'notify';
 const devicesPrefix = 'haDevices';
+const retryDelay = 10;
+const maxRetries = 20;
 
 if (process.env.SUPERVISOR_TOKEN)
     clearWWWDirectory();
 
 class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, Settings {
     connection: any;
-    processing: boolean;
     deviceMap: Record<string, HaBaseDevice> = {};
     entitiesMap: Record<string, HaEntityData> = {};
     devicesMap: Record<string, HaDeviceData> = {};
@@ -33,6 +34,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     entityIdDeviceIdMap: Record<string, string> = {};
     notifiersProvider: NotifyService;
     devicesProvider: HaDevice;
+    wsUnsubFn: () => void;
 
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
@@ -67,8 +69,8 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             choices: [],
             combobox: true,
             defaultValue: [],
-            onPut: () => {
-                this.sync();
+            onPut: async () => {
+                await this.startEntitiesSync();
             }
         },
         devicesToFetch: {
@@ -77,8 +79,8 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             choices: [],
             combobox: true,
             defaultValue: [],
-            onPut: () => {
-                this.sync();
+            onPut: async () => {
+                await this.startEntitiesSync();
             }
         },
     });
@@ -175,7 +177,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
             this.connection = await createConnection({ auth });
         } catch (e) {
-            this.console.error('Error in WS subscription', e);
+            throw e;
         }
     }
 
@@ -199,7 +201,6 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             httpsAgent,
         });
         const json = response.data as any;
-        this.console.log('Services response', JSON.stringify(json));
 
         const notify = json.find(service => service.domain === 'notify');
         const { services } = notify;
@@ -323,7 +324,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         }
 
         const entityIds = filteredEntities.map(entityStatus => entityStatus.entity_id).sort();
-        this.console.log('Entity IDs found:', entityIds);
+        this.console.log(`Found ${entityIds.length} entities`);
 
         this.storageSettings.settings.entitiesToFetch.choices = entityIds;
     }
@@ -376,7 +377,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 }
             }
 
-            this.console.log(`Devices found: ${JSON.stringify(names)}`);
+            this.console.log(`Found ${names.length} devices`);
 
             this.storageSettings.settings.devicesToFetch.choices = names.sort();
         } catch (e) {
@@ -386,11 +387,31 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     async startEntitiesSync() {
         if (this.connection) {
-            subscribeEntities(this.connection, async (entities: Record<string, HaEntityData>) => {
-                if (!this.processing) {
-                    try {
-                        this.processing = true;
+            if (this.wsUnsubFn) {
+                this.wsUnsubFn();
+                this.wsUnsubFn = undefined;
+            }
 
+            const { entitiesToFetch, devicesToFetch } = this.storageSettings.values;
+            const entityIds: string[] = [
+                ...entitiesToFetch ?? [],
+            ];
+
+            for (const deviceName of this.storageSettings.values.devicesToFetch) {
+                try {
+                    const deviceData = this.devicesMap[this.entityNameToIdMap[deviceName]];
+                    if (deviceData) {
+                        const { entityIds } = deviceData;
+                        entityIds.push(...(entityIds ?? []));
+                    }
+                } catch { }
+            }
+
+            if (entityIds.length) {
+                this.console.log(`Subscribing to ${entityIds.length} entities`);
+                this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
+                    this.console.log(`Entities update received: ${entities}`);
+                    try {
                         for (const entity of Object.values(entities)) {
                             const { entity_id } = entity;
 
@@ -430,16 +451,36 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
                     } catch (e) {
                         this.console.log('Error in subscribeEntities', e);
-                    } finally {
-                        this.processing = false;
                     }
-                }
-            });
+                });
+            } else {
+                this.console.log('No entities to subscribe');
+            }
         }
     }
 
     async sync() {
-        await this.connectWs();
+        let isConnected = false;
+        let currentTry = 1;
+
+        while (!isConnected && currentTry < maxRetries) {
+            try {
+                currentTry++;
+                await this.connectWs();
+                isConnected = true;
+                this.console.log('Connection to WS succeded');
+            } catch (e) {
+                this.console.log(`Error ${e} on WS connection, waiting ${retryDelay} seconds`);
+
+                await sleep(retryDelay * 1000);
+            }
+        }
+
+        if (!isConnected) {
+            this.console.log(`Connection to WS could not be estabilished after ${maxRetries} retries. Check your Homeassistant instance and restart this plugin`);
+            return;
+        }
+
         await this.fetchAvailableDevices();
         await this.fetchAvailableEntities();
         await this.syncDevices();

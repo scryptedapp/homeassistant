@@ -283,6 +283,8 @@ function processEvent(store, updates) {
     store.setState(state, true);
 }
 
+// TODO: This to submit as PR to the HA repository
+// https://github.com/home-assistant/home-assistant-js-websocket/issues/271
 export const subscribeEntities = (conn: any, entityIds: string[], onChange: (entities: Record<string, HaEntityData>) => Promise<void>) => getCollection(
     conn,
     "_ent",

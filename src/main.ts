@@ -470,10 +470,15 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 isConnected = true;
                 this.console.log('Connection to WS succeded');
             } catch (e) {
-                this.console.log(`Error on WS connection, waiting ${retryDelay} seconds`, e);
+                this.console.log(`Error ${e} on WS connection, waiting ${retryDelay} seconds`);
 
                 await sleep(retryDelay * 1000);
             }
+        }
+
+        if (!isConnected) {
+            this.console.log(`Connection to WS could not be estabilished after ${maxRetries} retries. Check your Homeassistant instance and restart this plugin`);
+            return;
         }
         await this.fetchAvailableDevices();
         await this.fetchAvailableEntities();

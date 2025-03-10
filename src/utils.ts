@@ -210,6 +210,8 @@ export const getDomainMetadata = (entityData: HaEntityData) => {
     }
 }
 
+// TODO: To be removed when PR will be submitted to the HA repository, this was copied from 
+// https://github.com/home-assistant/home-assistant-js-websocket/blob/master/lib/entities.ts#L47
 function processEvent(store, updates) {
     const state = Object.assign({}, store.state);
     if (updates.a) {

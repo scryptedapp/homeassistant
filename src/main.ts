@@ -410,7 +410,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             if (entityIds.length) {
                 this.console.log(`Subscribing to ${entityIds.length} entities`);
                 this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
-                    this.console.log(entities);
+                    this.console.log(`Entities update received: ${entities}`);
                     try {
                         for (const entity of Object.values(entities)) {
                             const { entity_id } = entity;
@@ -480,6 +480,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             this.console.log(`Connection to WS could not be estabilished after ${maxRetries} retries. Check your Homeassistant instance and restart this plugin`);
             return;
         }
+
         await this.fetchAvailableDevices();
         await this.fetchAvailableEntities();
         await this.syncDevices();

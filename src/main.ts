@@ -35,6 +35,9 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     notifiersProvider: NotifyService;
     devicesProvider: HaDevice;
     wsUnsubFn: () => void;
+    lastEventReceived: number;
+    disconnectionCheckInterval: NodeJS.Timeout;
+    connecting: boolean;
 
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
@@ -88,7 +91,20 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     constructor(nativeId?: string) {
         super(nativeId);
 
-        this.sync();
+        this.init().catch(this.console.error);
+    }
+
+    async init() {
+        // Check every 30 seconds if an event was received in the latest 10 minutes, if not most likely the WS died
+        this.disconnectionCheckInterval = setInterval(async () => {
+            const shouldReconnect = !this.lastEventReceived || (Date.now() - this.lastEventReceived) > 1000 * 60 * 10;
+            if (shouldReconnect && !this.connecting) {
+                this.console.log('No event received in the last 10 minutes, reconnecting');
+                await this.sync();
+            }
+        }, 1000 * 30);
+
+        await this.sync();
     }
 
     getSettings(): Promise<Setting[]> {
@@ -411,6 +427,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 this.console.log(`Subscribing to ${entityIds.length} entities: ${JSON.stringify(entityIds)}`);
                 this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
                     // this.console.log(`Entities update received: ${JSON.stringify(entities)}`);
+                    this.lastEventReceived = Date.now();
                     try {
                         for (const entity of Object.values(entities)) {
                             const { entity_id } = entity;
@@ -460,6 +477,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async sync() {
+        this.connecting = true;
         let isConnected = false;
         let currentTry = 1;
 
@@ -475,6 +493,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 await sleep(retryDelay * 1000);
             }
         }
+        this.connecting = false;
 
         if (!isConnected) {
             this.console.log(`Connection to WS could not be estabilished after ${maxRetries} retries. Check your Homeassistant instance and restart this plugin`);

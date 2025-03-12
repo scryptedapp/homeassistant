@@ -9,15 +9,15 @@ import { HaDevice } from './device';
 import { httpsAgent } from './httpsagent';
 import { NotifyService } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
-import { deviceNativeIdPrefix, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, subscribeEntities, supportedDomains } from './utils';
+import { deviceNativeIdPrefix, fillNotDiscoveredNotifiers, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, subscribeEntities, supportedDomains, fillNotDiscoveredEntities } from './utils';
 import { HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
 import { sleep } from '../../scrypted/common/src/sleep';
 
 globalThis.WebSocket = HaWebsocket as any;
 
-const notifyPrefix = 'notify';
-const devicesPrefix = 'haDevices';
+export const notifyPrefix = 'notify';
+export const devicesPrefix = 'haDevices';
 const retryDelay = 10;
 const maxRetries = 20;
 
@@ -85,6 +85,14 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             onPut: async () => {
                 await this.startEntitiesSync();
             }
+        },
+        preserveDiscoveredEntities: {
+            title: 'Preserve discovered entities',
+            description: 'If checked, once discovered entities will not be removed if not found by scrypted. This could happen when an integration gets disabled temporarily.',
+            type: 'boolean',
+            defaultValue: false,
+            group: 'Advanced',
+            immediate: true
         },
     });
 
@@ -212,6 +220,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async syncDevices() {
+        const { preserveDiscoveredEntities } = this.storageSettings.values;
         const response = await axios.get(new URL('services', this.getApiUrl()).toString(), {
             headers: this.getHeaders(),
             httpsAgent,
@@ -258,6 +267,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 ],
                 type: ScryptedDeviceType.Notifier,
             });
+        }
+
+        if (preserveDiscoveredEntities) {
+            await fillNotDiscoveredNotifiers(notifiersManifest, this.console);
         }
 
         await sdk.deviceManager.onDevicesChanged(notifiersManifest);
@@ -319,6 +332,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             } catch (e) {
                 this.console.log(`Error discovering device ${deviceName}`, e);
             }
+        }
+
+        if (preserveDiscoveredEntities) {
+            await fillNotDiscoveredEntities(devicesManifest, this.console);
         }
 
         await sdk.deviceManager.onDevicesChanged(devicesManifest);

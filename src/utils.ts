@@ -1,4 +1,4 @@
-import { ScryptedDeviceType, ScryptedInterface } from "@scrypted/sdk";
+import sdk, { DeviceManifest, ScryptedDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface } from "@scrypted/sdk";
 import type HomeAssistantPlugin from "./main";
 import { HaBaseDevice } from "./types/baseDevice";
 import { HaBinarySensor } from "./types/binarySensor";
@@ -13,6 +13,7 @@ import { HaClimate } from "./types/climate";
 import {
     getCollection
 } from "home-assistant-js-websocket";
+import { devicesPrefix, notifyPrefix } from "./main";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -209,6 +210,67 @@ export const getDomainMetadata = (entityData: HaEntityData) => {
         return domainMetadataMap[domain];
     }
 }
+
+const getPluginNativeIds = () => {
+    return sdk.deviceManager.getNativeIds().filter(
+        nativeId => !!nativeId && nativeId !== notifyPrefix && nativeId !== devicesPrefix);
+}
+
+export const fillNotDiscoveredNotifiers = async (manifest: DeviceManifest, console: Console) => {
+    const nativeIds = getPluginNativeIds().filter(nativeId => nativeId.startsWith(notifyPrefix));
+
+    const missingNativeIds = nativeIds.filter(nativeId => !manifest.devices.some(device => device.nativeId === nativeId));
+
+    if (missingNativeIds.length) {
+        console.log(`Following ${missingNativeIds.length} notifiers were not reported. Filling the manifest to preserve them: ${missingNativeIds.join(', ')}`);
+        for (const nativeId of missingNativeIds) {
+            const [_, service] = nativeId.split(':');
+            manifest.devices.push({
+                nativeId,
+                name: service,
+                interfaces: [
+                    ScryptedInterface.Notifier,
+                ],
+                type: ScryptedDeviceType.Notifier,
+            });
+        }
+    } else {
+        console.log('All existing notifiers were reported by homeassistant');
+    }
+}
+
+export const fillNotDiscoveredEntities = async (manifest: DeviceManifest, console: Console) => {
+    const nativeIds = getPluginNativeIds().filter(nativeId => !nativeId.startsWith(notifyPrefix));
+
+    const missingNativeIds = nativeIds.filter(nativeId => !manifest.devices.some(device => device.nativeId === nativeId));
+
+    if (missingNativeIds.length) {
+        const allDevices = Object.keys(sdk.systemManager.getSystemState()).map(deviceId => sdk.systemManager.getDeviceById(deviceId));
+        const devicesByNativeIdMap: Record<string, ScryptedDevice> = allDevices.reduce((tot, curr) => ({
+            ...tot,
+            [curr.nativeId]: curr
+        }), {});
+
+        console.log(`Following ${missingNativeIds.length} entities were not reported. Filling the manifest to preserve them: ${missingNativeIds.join(', ')}`);
+        for (const nativeId of missingNativeIds) {
+            const device = devicesByNativeIdMap[nativeId];
+
+            if (device) {
+                manifest.devices.push({
+                    providerNativeId: devicesPrefix,
+                    nativeId,
+                    name: device.name,
+                    interfaces: device.interfaces,
+                    type: device.type,
+                    info: device.info
+                });
+            }
+        }
+    } else {
+        console.log('All existing entities were reported by homeassistant');
+    }
+}
+
 
 // TODO: To be removed when PR will be submitted to the HA repository, this was copied from 
 // https://github.com/home-assistant/home-assistant-js-websocket/blob/master/lib/entities.ts#L47

@@ -221,28 +221,22 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         const notify = json.find(service => service.domain === 'notify');
         const { services } = notify;
 
-        const rootManifest: DeviceManifest = {
-            devices: [
-                {
-                    nativeId: notifyPrefix,
-                    name: 'Notify Service',
-                    interfaces: [
-                        ScryptedInterface.DeviceProvider,
-                    ],
-                    type: ScryptedDeviceType.Builtin,
-                },
-                {
-                    nativeId: devicesPrefix,
-                    name: 'Homeassistant devices',
-                    interfaces: [
-                        ScryptedInterface.DeviceProvider,
-                    ],
-                    type: ScryptedDeviceType.Builtin,
-                }
+        await sdk.deviceManager.onDeviceDiscovered({
+            nativeId: notifyPrefix,
+            name: 'Notify Service',
+            interfaces: [
+                ScryptedInterface.DeviceProvider,
             ],
-        };
-
-        await sdk.deviceManager.onDevicesChanged(rootManifest);
+            type: ScryptedDeviceType.Builtin,
+        });
+        await sdk.deviceManager.onDeviceDiscovered({
+            nativeId: devicesPrefix,
+            name: 'Homeassistant devices',
+            interfaces: [
+                ScryptedInterface.DeviceProvider,
+            ],
+            type: ScryptedDeviceType.Builtin,
+        });
 
         for (const service of Object.keys(services)) {
             await sdk.deviceManager.onDeviceDiscovered({
@@ -277,7 +271,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                         manufacturer,
                         model
                     }
-                })
+                });
             }
         }
 

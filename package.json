@@ -19,7 +19,8 @@
       "type": "API",
       "interfaces": [
          "DeviceProvider",
-         "Settings"
+         "Settings",
+         "DeviceDiscovery"
       ],
       "realfs": true
    },

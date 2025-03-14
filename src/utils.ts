@@ -13,7 +13,6 @@ import { HaClimate } from "./types/climate";
 import {
     getCollection
 } from "home-assistant-js-websocket";
-import { devicesPrefix, notifyPrefix } from "./main";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -65,6 +64,15 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.Sensor,
 ];
 
+export const isEntitySupported = (entityId: string) => {
+    if (!entityId || !entityId.includes('.')) {
+        return false;
+    }
+
+    const [domain] = entityId.split('.');
+    return supportedDomains.includes(domain as HaDomain);
+}
+
 export const formatEntityIdToDeviceName = (entityId) => {
     let formatted = entityId.replace(/_/g, ' ');
     formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
@@ -76,7 +84,7 @@ interface DeviceConstructor {
     new(plugin: HomeAssistantPlugin, nativeId: string, entity: HaEntityData): HaBaseDevice;
 }
 
-interface DomainMetadata {
+export interface DomainMetadata {
     nativeIdPrefix: string;
     type: ScryptedDeviceType | string;
     interfaces: ScryptedInterface[];
@@ -197,8 +205,9 @@ export const getDomainMetadata = (entityData: HaEntityData) => {
                 nativeIdPrefix: 'haBinaryDoorSensor',
                 deviceConstructor: HaBinarySensor,
             };
+        } else {
+            return domainMetadataMap[HaDomain.BinarySensor];
         }
-        return domainMetadataMap[HaDomain.BinarySensor];
     }
     if (domain === HaDomain.Sensor) {
         const metadata = mapSensorEntity(entityData);
@@ -297,3 +306,62 @@ export const subscribeEntities = (conn: any, entityIds: string[], onChange: (ent
         entity_ids: entityIds,
     })
 ).subscribe(onChange);
+
+export interface DomainQueryResultItem {
+    entity_id: string;
+    state: string;
+    attributes: Attributes;
+    manufacturer: string | null;
+    model: string | null;
+    name: string | null;
+    device_id: string;
+  }
+
+export const buildDomainQuery = (domain: HaDomain) => {
+    if (domain === HaDomain.Sensor) {
+        return `{% set domain = '${domain}' %}
+                    {% set result = namespace(items=[]) %}
+                    {% for entity in states[domain] %}
+                    {% if entity.state != 'unknown' and entity.state != 'unavailable' %}
+                        {% if (entity.attributes.device_class == 'temperature' and entity.attributes.state_class == 'measurement') or
+                            (entity.attributes.device_class == 'humidity' and entity.attributes.state_class == 'measurement') %}
+                        {% set device_id = device_id(entity.entity_id) %}
+                        {% if device_id %}
+                            {% set item = {
+                            'entity_id': entity.entity_id,
+                            'state': entity.state,
+                            'attributes': entity.attributes,
+                            'manufacturer': device_attr(device_id, 'manufacturer'),
+                            'model': device_attr(device_id, 'model'),
+                            'name': device_attr(device_id, 'name'),
+                            'device_id': device_id
+                            } %}
+                            {% set result.items = result.items + [item] %}
+                        {% endif %}
+                        {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                    {{ result.items | tojson }}`;
+    } else {
+        return `{% set domain = '${domain}' %}
+                    {% set result = namespace(items=[]) %}
+                    {% for entity in states[domain] %}
+                    {% if entity.state != 'unknown' and entity.state != 'unavailable' %}
+                        {% set device_id = device_id(entity.entity_id) %}
+                        {% if device_id %}
+                        {% set item = {
+                            'entity_id': entity.entity_id,
+                            'state': entity.state,
+                            'attributes': entity.attributes,
+                            'manufacturer': device_attr(device_id, 'manufacturer'),
+                            'model': device_attr(device_id, 'model'),
+                            'name': device_attr(device_id, 'name'),
+                            'device_id': device_id
+                        } %}
+                        {% set result.items = result.items + [item] %}
+                        {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                    {{ result.items | tojson }}`;
+    }
+}

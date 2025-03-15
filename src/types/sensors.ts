@@ -44,35 +44,43 @@ export class HaSensors extends HaBaseDevice implements Sensors, Settings {
     }
 
     async updateState(entityData: HaEntityData) {
-        if (!this.sensors) {
-            this.sensors = {};
-        }
+        try {
+            if (!this.sensors) {
+                this.sensors = {};
+            }
 
-        const { state, entity_id, attributes: { unit_of_measurement, friendly_name } } = entityData;
+            const { state, entity_id, attributes: { unit_of_measurement, friendly_name } } = entityData;
 
-        const unit = unit_of_measurement ? UnitConverter.getUnit(unit_of_measurement)?.unit : undefined;
-        const numericValue = Number(state);
+            const unit = unit_of_measurement ? UnitConverter.getUnit(unit_of_measurement)?.unit : undefined;
+            const numericValue = Number(state);
 
-        let value = state;
+            let value = state;
 
-        if (!Number.isNaN(numericValue)) {
-            value = UnitConverter.localToSi(numericValue, unit);
-        }
+            if (!Number.isNaN(numericValue)) {
+                value = UnitConverter.localToSi(numericValue, unit);
+            }
 
-        const updatedSensorData: Sensor = {
-            name: friendly_name,
-            unit,
-            value
-        };
-
-        const currentValue = this.sensors[entity_id];
-        if (currentValue?.value !== value) {
-            this.sensors = {
-                ...this.sensors,
-                [entity_id]: updatedSensorData
+            const updatedSensorData: Sensor = {
+                name: friendly_name,
+                unit,
+                value
             };
 
-            await this.onDeviceEvent(entity_id, updatedSensorData);
+            const currentValue = this.sensors[entity_id];
+            if (currentValue?.value !== value) {
+                this.sensors = {
+                    ...this.sensors,
+                    [entity_id]: updatedSensorData
+                };
+
+                await this.onDeviceEvent(entity_id, updatedSensorData);
+            }
+        } catch (e) {
+            this.console.error(`Error during updateState: ${JSON.stringify({
+                entityData,
+                nativeId: this.nativeId,
+                entity: this.entity
+            })}`, e);
         }
     }
 }

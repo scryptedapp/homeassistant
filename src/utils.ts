@@ -1,18 +1,18 @@
-import sdk, { DeviceManifest, ScryptedDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface } from "@scrypted/sdk";
-import type HomeAssistantPlugin from "./main";
-import { HaBaseDevice } from "./types/baseDevice";
-import { HaBinarySensor } from "./types/binarySensor";
-import { HaLock } from "./types/lock";
-import { HaSwitch } from "./types/switch";
-import { HaLight } from "./types/light";
-import { HaSecuritySystem } from "./types/securitySystem";
-import { HaButton } from "./types/button";
-import { HaScript } from "./types/script";
-import { HaCover } from "./types/cover";
-import { HaClimate } from "./types/climate";
+import { ScryptedDeviceType, ScryptedInterface } from "@scrypted/sdk";
 import {
     getCollection
 } from "home-assistant-js-websocket";
+import type HomeAssistantPlugin from "./main";
+import { HaBaseDevice } from "./types/baseDevice";
+import { HaBinarySensor } from "./types/binarySensor";
+import { HaButton } from "./types/button";
+import { HaClimate } from "./types/climate";
+import { HaCover } from "./types/cover";
+import { HaLight } from "./types/light";
+import { HaLock } from "./types/lock";
+import { HaScript } from "./types/script";
+import { HaSecuritySystem } from "./types/securitySystem";
+import { HaSwitch } from "./types/switch";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -25,7 +25,8 @@ export enum HaDomain {
     Cover = 'cover',
     Climate = 'climate',
     Sensor = 'sensor',
-    Device = 'device',
+    Device = 'haDevice',
+    Notify = 'notify',
 }
 
 interface Attributes {
@@ -40,10 +41,11 @@ interface Attributes {
 export interface HaDeviceData {
     deviceId: string;
     entityIds: string[];
+    area: string;
     name: string;
+    manufacturer: string;
+    model: string;
 }
-
-export const deviceNativeIdPrefix = 'haDevice';
 
 export interface HaEntityData<TState extends string = string> {
     entity_id: string;
@@ -63,15 +65,6 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.Cover,
     HaDomain.Sensor,
 ];
-
-export const isEntitySupported = (entityId: string) => {
-    if (!entityId || !entityId.includes('.')) {
-        return false;
-    }
-
-    const [domain] = entityId.split('.');
-    return supportedDomains.includes(domain as HaDomain);
-}
 
 export const formatEntityIdToDeviceName = (entityId) => {
     let formatted = entityId.replace(/_/g, ' ');
@@ -153,6 +146,7 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
     },
     [HaDomain.Device]: undefined,
     [HaDomain.Sensor]: undefined,
+    [HaDomain.Notify]: undefined,
 };
 
 export const getSensorType = (entity: HaEntityData) => {
@@ -160,7 +154,9 @@ export const getSensorType = (entity: HaEntityData) => {
     const isTemperatureSensor = isSensor && entity.attributes.device_class === 'temperature' && entity.attributes.state_class === 'measurement';
     const isHumiditySensor = isSensor && entity.attributes.device_class === 'humidity' && entity.attributes.state_class === 'measurement';
 
-    return { isSensor, isTemperatureSensor, isHumiditySensor }
+    const isSupported = isTemperatureSensor || isHumiditySensor;
+
+    return { isSensor, isTemperatureSensor, isHumiditySensor, isSupported }
 }
 
 export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
@@ -307,61 +303,52 @@ export const subscribeEntities = (conn: any, entityIds: string[], onChange: (ent
     })
 ).subscribe(onChange);
 
-export interface DomainQueryResultItem {
-    entity_id: string;
-    state: string;
-    attributes: Attributes;
-    manufacturer: string | null;
-    model: string | null;
-    name: string | null;
-    device_id: string;
-  }
-
-export const buildDomainQuery = (domain: HaDomain) => {
-    if (domain === HaDomain.Sensor) {
-        return `{% set domain = '${domain}' %}
-                    {% set result = namespace(items=[]) %}
-                    {% for entity in states[domain] %}
-                    {% if entity.state != 'unknown' and entity.state != 'unavailable' %}
-                        {% if (entity.attributes.device_class == 'temperature' and entity.attributes.state_class == 'measurement') or
-                            (entity.attributes.device_class == 'humidity' and entity.attributes.state_class == 'measurement') %}
-                        {% set device_id = device_id(entity.entity_id) %}
-                        {% if device_id %}
-                            {% set item = {
-                            'entity_id': entity.entity_id,
-                            'state': entity.state,
-                            'attributes': entity.attributes,
-                            'manufacturer': device_attr(device_id, 'manufacturer'),
-                            'model': device_attr(device_id, 'model'),
-                            'name': device_attr(device_id, 'name'),
-                            'device_id': device_id
-                            } %}
-                            {% set result.items = result.items + [item] %}
-                        {% endif %}
-                        {% endif %}
-                    {% endif %}
-                    {% endfor %}
-                    {{ result.items | tojson }}`;
-    } else {
-        return `{% set domain = '${domain}' %}
-                    {% set result = namespace(items=[]) %}
-                    {% for entity in states[domain] %}
-                    {% if entity.state != 'unknown' and entity.state != 'unavailable' %}
-                        {% set device_id = device_id(entity.entity_id) %}
-                        {% if device_id %}
-                        {% set item = {
-                            'entity_id': entity.entity_id,
-                            'state': entity.state,
-                            'attributes': entity.attributes,
-                            'manufacturer': device_attr(device_id, 'manufacturer'),
-                            'model': device_attr(device_id, 'model'),
-                            'name': device_attr(device_id, 'name'),
-                            'device_id': device_id
-                        } %}
-                        {% set result.items = result.items + [item] %}
-                        {% endif %}
-                    {% endif %}
-                    {% endfor %}
-                    {{ result.items | tojson }}`;
-    }
+export interface DevicesQueryResultItem {
+    area: string;
+    id: string;
+    name: string;
+    model: string;
+    manufacturer: string;
+    entities: string[];
 }
+
+export const buildDevicesTemplate = (entityIds: string[]) => {
+    return `{% set entities = ${JSON.stringify(entityIds)} %}
+       {% set result = namespace(items=[]) %}
+        
+        {% for entity_id in entities %}
+          {% set entity = states(entity_id) %}
+          
+            {% set device_id = device_id(entity_id) %}
+            
+            {% if device_id %}
+              {% set item = {
+                'entity_id': entity_id,
+                'device_id': device_id,
+                'device_name': device_attr(device_id, 'name') | default('Unknown'),
+                'manufacturer': device_attr(device_id, 'manufacturer') | default('Unknown'),
+                'model': device_attr(device_id, 'model') | default('Unknown'),
+                'area': area_name(area_id(entity_id)) | default('Unknown')
+              } %}
+          
+          {% set result.items = result.items + [item] %}
+                      {% endif %}
+        {% endfor %}
+               {% set finalRes = namespace(devices=[]) %}
+        {% for device_id, items in result.items|groupby("device_id") %}
+        {% set entities = namespace(entities=[]) %}
+          {% for entity in items %}
+          {% set entities.entities = entities.entities + [entity.entity_id] %}
+          {% endfor %}
+          {% set device = {
+                'entities': entities.entities,
+                'id': device_id,
+                'name': device_attr(device_id, 'name') | default('Unknown'),
+                'manufacturer': device_attr(device_id, 'manufacturer') | default('Unknown'),
+                'model': device_attr(device_id, 'model') | default('Unknown'),
+                'area': area_name(area_id(device_id)) | default('Unknown')
+              } %}
+         {% set finalRes.devices = finalRes.devices + [device] %}
+        {% endfor %}
+        {{finalRes.devices|tojson}}`;
+};

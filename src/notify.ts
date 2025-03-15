@@ -90,15 +90,3 @@ export class NotifyDevice extends ScryptedDeviceBase implements Notifier {
         this.console.log('notification sent', response.data);
     }
 }
-
-export class NotifyService extends ScryptedDeviceBase implements DeviceProvider {
-    constructor(public plugin: HomeAssistantPlugin, nativeId: string) {
-        super(nativeId);
-    }
-
-    async getDevice(nativeId: string): Promise<any> {
-        return new NotifyDevice(this.plugin, nativeId);
-    }
-    async releaseDevice(id: string, nativeId: string): Promise<void> {
-    }
-}

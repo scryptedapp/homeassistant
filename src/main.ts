@@ -1,23 +1,21 @@
-import sdk, { AdoptDevice, Device, DeviceDiscovery, DeviceManifest, DeviceProvider, DiscoveredDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, Setting, Settings, SettingValue } from '@scrypted/sdk';
+import sdk, { AdoptDevice, Device, DeviceDiscovery, DeviceProvider, DiscoveredDevice, ScryptedDeviceBase, ScryptedDeviceType, ScryptedInterface, Setting, Settings, SettingValue } from '@scrypted/sdk';
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import axios from 'axios';
 import {
     createConnection,
     createLongLivedTokenAuth,
 } from "home-assistant-js-websocket";
-import { HaDevice } from './device';
+import { sleep } from '../../scrypted/common/src/sleep';
 import { httpsAgent } from './httpsagent';
-import { NotifyService } from './notify';
+import { NotifyDevice } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
-import { buildDomainQuery, deviceNativeIdPrefix, DomainMetadata, DomainQueryResultItem, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, isEntitySupported, subscribeEntities, supportedDomains } from './utils';
+import { HaSensors } from './types/sensors';
+import { buildDevicesTemplate, DevicesQueryResultItem, DomainMetadata, formatEntityIdToDeviceName, getDomainMetadata, getSensorType, HaDeviceData, HaDomain, HaEntityData, subscribeEntities, supportedDomains } from './utils';
 import { HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
-import { sleep } from '../../scrypted/common/src/sleep';
 
 globalThis.WebSocket = HaWebsocket as any;
 
-export const notifyPrefix = 'notify';
-export const devicesPrefix = 'haDevices';
 const retryDelay = 10;
 const maxRetries = 20;
 
@@ -27,18 +25,18 @@ if (process.env.SUPERVISOR_TOKEN)
 class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, Settings, DeviceDiscovery {
     connection: any;
     deviceMap: Record<string, HaBaseDevice> = {};
-    entitiesMap: Record<string, HaEntityData> = {};
+    entitiesDataMap: Record<string, HaEntityData> = {};
+    notifiersMap: Record<string, NotifyDevice> = {};
     nativeIdEntityIdMap: Record<string, string> = {};
-    devicesMap: Record<string, HaDeviceData> = {};
+    devicesDataMap: Record<string, HaDeviceData> = {};
     // Entities can belong to only 1 device
     entityIdDeviceIdMap: Record<string, string> = {};
-    notifiersProvider: NotifyService;
-    devicesProvider: HaDevice;
     wsUnsubFn: () => void;
     lastEventReceived: number;
     lastRefresh: number;
     disconnectionCheckInterval: NodeJS.Timeout;
     connecting: boolean;
+    processing: boolean;
     discoveredDevices = new Map<string, {
         device: Device;
         description: string;
@@ -55,7 +53,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             hide: !!process.env.SUPERVISOR_TOKEN,
             placeholder: '192.168.2.100:8123',
             onPut: () => {
-                this.sync();
+                this.startWeboscket();
             }
         },
         protocol: {
@@ -68,29 +66,9 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 'https',
             ],
             onPut: () => {
-                this.sync();
+                this.startWeboscket();
             }
-        },
-        // entitiesToFetch: {
-        //     title: 'Entities to fetch',
-        //     multiple: true,
-        //     choices: [],
-        //     combobox: true,
-        //     defaultValue: [],
-        //     onPut: async () => {
-        //         await this.startEntitiesSync();
-        //     }
-        // },
-        // devicesToFetch: {
-        //     title: 'Devices to fetch',
-        //     multiple: true,
-        //     choices: [],
-        //     combobox: true,
-        //     defaultValue: [],
-        //     onPut: async () => {
-        //         await this.startEntitiesSync();
-        //     }
-        // }
+        }
     });
 
     constructor(nativeId?: string) {
@@ -105,11 +83,12 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             const shouldReconnect = !this.lastEventReceived || (Date.now() - this.lastEventReceived) > 1000 * 60 * 10;
             if (shouldReconnect && !this.connecting) {
                 this.console.log('No event received in the last 10 minutes, reconnecting');
-                await this.sync();
+                await this.startWeboscket();
             }
         }, 1000 * 30);
 
-        await this.sync();
+        await this.discoverDevices(true);
+        await this.startWeboscket();
     }
 
     getSettings(): Promise<Setting[]> {
@@ -135,29 +114,28 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async getDevice(nativeId: string): Promise<any> {
-        if (nativeId === notifyPrefix) {
-            if (this.notifiersProvider) {
-                return this.notifiersProvider;
+        const [domain] = nativeId.split(':');
+        if (domain === HaDomain.Notify) {
+            if (this.notifiersMap[nativeId]) {
+                return this.notifiersMap[nativeId];
             }
 
-            const ret = new NotifyService(this, notifyPrefix);
-            this.notifiersProvider = ret;
+            const ret = new NotifyDevice(this, nativeId);
+            this.notifiersMap[nativeId] = ret;
             return ret;
-        }
-
-        if (nativeId === devicesPrefix) {
-            if (this.devicesProvider) {
-                return this.devicesProvider;
+        } else {
+            if (this.notifiersMap[nativeId]) {
+                return this.notifiersMap[nativeId];
             }
 
-            const ret = new HaDevice(this, devicesPrefix);
-            this.devicesProvider = ret;
+            const ret = this.getEntityOrDevice(nativeId);
+            this.deviceMap[nativeId] = ret;
             return ret;
         }
-
     }
 
     async releaseDevice(id: string, nativeId: string): Promise<void> {
+        await this.init();
     }
 
     async connectWs() {
@@ -177,7 +155,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         }
     }
 
-    buildNativeId(entityData: HaEntityData, metadata?: DomainMetadata) {
+    buildEntityNativeId(entityData: HaEntityData, metadata?: DomainMetadata) {
         const domainMetadata = metadata ?? getDomainMetadata(entityData);
 
         if (domainMetadata) {
@@ -188,243 +166,44 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     buildDeviceNativeId(deviceId: string) {
-        return `${deviceNativeIdPrefix}:${deviceId}`
+        return `${HaDomain.Device}:${deviceId}`
     }
 
-    async syncDevices() {
-        const response = await axios.get(new URL('services', this.getApiUrl()).toString(), {
-            headers: this.getHeaders(),
-            httpsAgent,
-        });
-        const json = response.data as any;
+    getEntityOrDevice(nativeId: string) {
+        try {
+            const [domain, entityId] = nativeId.split(':');
+            let device;
 
-        const notify = json.find(service => service.domain === 'notify');
-        const { services } = notify;
+            if (domain === HaDomain.Device) {
+                const deviceData = this.devicesDataMap[entityId];
 
-        await sdk.deviceManager.onDeviceDiscovered({
-            nativeId: notifyPrefix,
-            name: 'Notify Service',
-            interfaces: [
-                ScryptedInterface.DeviceProvider,
-            ],
-            type: ScryptedDeviceType.Builtin,
-        });
-        await sdk.deviceManager.onDeviceDiscovered({
-            nativeId: devicesPrefix,
-            name: 'Homeassistant devices',
-            interfaces: [
-                ScryptedInterface.DeviceProvider,
-            ],
-            type: ScryptedDeviceType.Builtin,
-        });
-
-        // for (const service of Object.keys(services)) {
-        //     await sdk.deviceManager.onDeviceDiscovered({
-        //         providerNativeId: notifyPrefix,
-        //         nativeId: `${notifyPrefix}:${service}`,
-        //         name: service,
-        //         interfaces: [
-        //             ScryptedInterface.Notifier,
-        //         ],
-        //         type: ScryptedDeviceType.Notifier,
-        //     });
-        // }
-
-        // for (const entityId of this.storageSettings.values.entitiesToFetch) {
-        //     const { manufacturer, model } = await this.getEntityDeviceInfo(entityId);
-        //     const entityData: HaEntityData = this.entitiesMap[entityId] ??
-        //         { entity_id: entityId, state: undefined, attributes: { friendly_name: formatEntityIdToDeviceName(entityId) } };
-        //     const deviceName = entityData.attributes.friendly_name;
-
-        //     const domainMetadata = getDomainMetadata(entityData);
-
-        //     if (domainMetadata) {
-        //         const { interfaces, type } = domainMetadata;
-
-        //         await sdk.deviceManager.onDeviceDiscovered({
-        //             providerNativeId: devicesPrefix,
-        //             nativeId: this.buildNativeId(entityData),
-        //             name: deviceName,
-        //             interfaces,
-        //             type: type as ScryptedDeviceType,
-        //             info: {
-        //                 manufacturer,
-        //                 model
-        //             }
-        //         });
-        //     }
-        // }
-
-        // for (const deviceName of this.storageSettings.values.devicesToFetch) {
-        //     try {
-        //         const deviceData = this.devicesMap[this.entityNameToIdMap[deviceName]];
-        //         if (deviceData) {
-        //             const { name, deviceId, entityIds } = deviceData;
-        //             const { manufacturer, model } = await this.getEntityDeviceInfo(deviceId);
-
-        //             for (const entityId of entityIds) {
-        //                 this.entityIdDeviceIdMap[entityId] = deviceId;
-        //             }
-
-        //             await sdk.deviceManager.onDeviceDiscovered({
-        //                 providerNativeId: devicesPrefix,
-        //                 nativeId: this.buildDeviceNativeId(deviceId),
-        //                 name,
-        //                 interfaces: [ScryptedInterface.Sensors, ScryptedInterface.Settings],
-        //                 type: ScryptedDeviceType.Sensor,
-        //                 info: {
-        //                     manufacturer,
-        //                     model
-        //                 }
-        //             });
-        //         } else {
-        //             this.console.log(`Device data for ${deviceName} not found`);
-        //         }
-        //     } catch (e) {
-        //         this.console.log(`Error discovering device ${deviceName}`, e);
-        //     }
-        // }
-    }
-
-    // async fetchAvailableDevices() {
-    //     try {
-    //         this.devicesMap = {};
-    //         this.entityNameToIdMap = {};
-    //         const names: string[] = [];
-    //         const response = await axios.post<string>(new URL('template', this.getApiUrl()).toString(),
-    //             {
-    //                 "template": "{{ states | map(attribute='entity_id') | map('device_id') | unique | reject('eq',None) | list }}"
-    //             },
-    //             {
-    //                 headers: this.getHeaders(),
-    //                 httpsAgent,
-    //             }
-    //         );
-    //         const deviceIds: string[] = JSON.parse(response.data.replaceAll("'", '"'));
-
-    //         for (const deviceId of deviceIds) {
-    //             const deviceNameResponse = await axios.post<string>(new URL('template', this.getApiUrl()).toString(),
-    //                 {
-    //                     "template": `{{ device_attr('${deviceId}', 'name') }}`
-    //                 },
-    //                 {
-    //                     headers: this.getHeaders(),
-    //                     httpsAgent,
-    //                 }
-    //             );
-    //             const deviceEntitiesResponse = await axios.post<string>(new URL('template', this.getApiUrl()).toString(),
-    //                 {
-    //                     "template": `{{ device_entities('${deviceId}') }}`
-    //                 },
-    //                 {
-    //                     headers: this.getHeaders(),
-    //                     httpsAgent,
-    //                 }
-    //             );
-
-    //             const name = deviceNameResponse.data;
-    //             const entityIds = JSON.parse(deviceEntitiesResponse.data.replaceAll("'", '"'));
-    //             const anySupportedEntity = entityIds.some(entityId => isEntitySupported(entityId));
-    //             if (name && !names.includes(name) && anySupportedEntity) {
-    //                 names.push(name);
-    //                 this.entityNameToIdMap[name] = deviceId;
-    //                 this.devicesMap[deviceId] = {
-    //                     deviceId,
-    //                     name,
-    //                     entityIds
-    //                 }
-    //             }
-    //         }
-
-    //         this.console.log(`Found ${names.length} devices`);
-    //         this.console.log(JSON.stringify(Object.values(this.devicesMap)));
-
-    //         // this.storageSettings.settings.devicesToFetch.choices = names.sort();
-    //     } catch (e) {
-    //         this.console.log('Error in fetchAvailableDevices', e);
-    //     }
-    // }
-
-    async startEntitiesSync() {
-        if (this.connection) {
-            if (this.wsUnsubFn) {
-                this.wsUnsubFn();
-                this.wsUnsubFn = undefined;
-            }
-
-            // const { entitiesToFetch, devicesToFetch } = this.storageSettings.values;
-            // const entityIds: string[] = [
-            //     ...entitiesToFetch ?? [],
-            // ];
-
-            // for (const deviceName of devicesToFetch) {
-            //     try {
-            //         const deviceData = this.devicesMap[this.entityNameToIdMap[deviceName]];
-            //         if (deviceData) {
-            //             const { entityIds: deviceEntityIds } = deviceData;
-            //             entityIds.push(...(deviceEntityIds ?? []));
-            //         }
-            //     } catch { }
-            // }
-
-            const entityIds = sdk.deviceManager.getNativeIds()
-                .map(nativeId => this.nativeIdEntityIdMap[nativeId])
-                .filter(nativeId => !!nativeId);
-
-            if (entityIds.length) {
-                // this.console.log(`Subscribing to ${entityIds.length} entities: ${JSON.stringify(entityIds)}`);
-                // this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
-                //     // this.console.log(`Entities update received: ${JSON.stringify(entities)}`);
-                //     this.lastEventReceived = Date.now();
-                //     try {
-                //         for (const entity of Object.values(entities)) {
-                //             const { entity_id } = entity;
-
-                //             // Check if the entity is ingesteded as Device standalone
-                //             if (this.storageSettings.values.entitiesToFetch.includes(entity_id)) {
-                //                 let device = this.deviceMap[entity_id];
-
-                //                 if (!device) {
-                //                     const nativeId = this.buildNativeId(entity);
-                //                     if (nativeId) {
-                //                         device = this.devicesProvider.getDeviceInternal(nativeId);
-                //                     }
-                //                 }
-
-                //                 if (device) {
-                //                     await device.updateState(entity);
-                //                 }
-                //             }
-
-                //             // Check if the entity is ingesteded as Sensors device
-                //             const deviceId = this.entityIdDeviceIdMap[entity_id];
-                //             if (deviceId) {
-                //                 let device = this.deviceMap[deviceId];
-
-                //                 if (!device) {
-                //                     const nativeId = this.buildDeviceNativeId(deviceId);
-                //                     if (nativeId) {
-                //                         device = this.devicesProvider.getDeviceInternal(nativeId);
-                //                     }
-                //                 }
-
-                //                 if (device) {
-                //                     await device.updateState(entity);
-                //                 }
-                //             }
-                //         }
-
-                //     } catch (e) {
-                //         this.console.log('Error in subscribeEntities', e);
-                //     }
-                // });
+                if (deviceData) {
+                    const { entityIds } = deviceData;
+                    const entities = entityIds.map(innerEntityId => this.entitiesDataMap[innerEntityId])
+                        .filter(entity => !!entity);
+                    device = new HaSensors(this, nativeId, entities);
+                }
             } else {
-                this.console.log('No entities to subscribe');
+                const entityData = this.entitiesDataMap[entityId];
+                if (entityData) {
+                    const DeviceConstructor = getDomainMetadata(entityData)?.deviceConstructor;
+
+                    if (DeviceConstructor) {
+                        device = new DeviceConstructor(this, nativeId, entityData);
+                    }
+                }
             }
+
+            if (device) {
+                device.refreshConfiguration();
+                return device;
+            }
+        } catch (e) {
+            this.console.log('Error in device getDeviceInternal', e);
         }
     }
 
-    async sync() {
+    async startWeboscket() {
         this.connecting = true;
         let isConnected = false;
         let currentTry = 1;
@@ -448,64 +227,230 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             return;
         }
 
-        // await this.fetchAvailableDevices();
-        // await this.fetchAvailableEntities();
-        // await this.syncDevices();
-        await this.startEntitiesSync();
+        if (this.connection) {
+            if (this.wsUnsubFn) {
+                this.wsUnsubFn();
+                this.wsUnsubFn = undefined;
+            }
+
+            const entityIds: string[] = [];
+            const nativeIds = sdk.deviceManager.getNativeIds();
+            for (const nativeId of nativeIds) {
+                if (!nativeId) {
+                    continue;
+                }
+                const [domain, entityId] = nativeId.split(':');
+                if (domain === HaDomain.Device) {
+                    const relatedEntityIds = Object.entries(this.entityIdDeviceIdMap)
+                        .filter(([innerEntityId, deviceId]) =>
+                            !!innerEntityId && !!deviceId && entityId === deviceId
+                        )
+                        .map(([innerEntityId]) => innerEntityId);
+
+                    entityIds.push(...relatedEntityIds);
+                } else if (domain === HaDomain.Notify) {
+                    // no-op
+                } else {
+                    entityId && entityIds.push(entityId);
+                }
+            }
+
+            if (entityIds.length) {
+                this.console.log(`Subscribing to ${entityIds.length} entities: ${JSON.stringify({ entityIds })}`);
+                this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
+                    // this.console.log(`Entities update received: ${JSON.stringify(entities)}`);
+                    this.lastEventReceived = Date.now();
+                    if (this.processing) {
+                        return;
+                    }
+                    this.processing = true;
+                    try {
+                        const currentNativeIds = sdk.deviceManager.getNativeIds();
+                        for (const entity of Object.values(entities)) {
+                            const { entity_id } = entity;
+                            const entityNativeId = this.buildEntityNativeId(entity);
+
+                            // Check if the entity is ingesteded as Entity device standalone
+                            if (entityNativeId && currentNativeIds.includes(entityNativeId)) {
+                                let device = this.deviceMap[entityNativeId];
+
+                                if (!device) {
+                                    device = this.getEntityOrDevice(entityNativeId);
+                                    this.deviceMap[entityNativeId] = device;
+                                }
+
+                                if (device) {
+                                    await device.updateState(entity);
+                                }
+                            }
+
+                            const deviceId = this.entityIdDeviceIdMap[entity_id];
+                            // Check if the entity is ingesteded as Sensors device
+                            if (deviceId) {
+                                let device = this.deviceMap[deviceId];
+
+                                if (!device) {
+                                    const deviceNativeId = this.buildDeviceNativeId(deviceId);
+
+                                    if (deviceNativeId && currentNativeIds.includes(deviceNativeId)) {
+                                        device = this.getEntityOrDevice(deviceNativeId);
+                                        this.deviceMap[deviceNativeId] = device;
+                                    }
+                                }
+
+                                if (device) {
+                                    await device.updateState(entity);
+                                }
+                            }
+                        }
+
+                    } catch (e) {
+                        this.console.log('Error in subscribeEntities', e);
+                    } finally {
+                        this.processing = false;
+                    }
+                });
+            } else {
+                this.console.log('No entities to subscribe');
+            }
+        }
     }
 
     async syncEntitiesFromRemote() {
-        this.entitiesMap = {};
+        this.entitiesDataMap = {};
         this.nativeIdEntityIdMap = {};
-        this.devicesMap = {};
+        this.devicesDataMap = {};
         this.entityIdDeviceIdMap = {};
 
-        for (const domain of supportedDomains) {
-            const payload = {
-                template: buildDomainQuery(domain)
-            };
+        const allEntitiesResponse = await axios.get<HaEntityData[]>(new URL('states', this.getApiUrl()).toString(), {
+            headers: this.getHeaders(),
+            httpsAgent,
+        });
 
+        const entities = allEntitiesResponse.data.filter((entity) => {
+            const { entity_id } = entity;
+            const [domain] = entity_id.split('.');
+            if (!supportedDomains.includes(domain as HaDomain)) {
+                return false;
+            } else if (domain === HaDomain.Sensor) {
+                return getSensorType(entity)?.isSupported;
+            } else {
+                return true
+            }
+        });
+
+        for (const domain of supportedDomains) {
             try {
-                const domainResponse = await axios.post<DomainQueryResultItem[]>(new URL('template', this.getApiUrl()).toString(), payload, {
+                const domainEntities = entities.filter(entity => entity.entity_id.split('.')[0] === domain).map(entity => entity.entity_id);
+                const payload = {
+                    template: buildDevicesTemplate(domainEntities)
+                };
+                const devicesResponse = await axios.post<DevicesQueryResultItem[]>(new URL('template', this.getApiUrl()).toString(), payload, {
                     headers: this.getHeaders(),
                     httpsAgent,
                 });
+                const devices = devicesResponse.data;
 
-                this.console.log(`Found ${domainResponse.data.length} entities for domain ${domain}`);
-                for (const entityData of domainResponse.data) {
-                    const { entity_id, attributes: { friendly_name }, device_id, manufacturer, model, name } = entityData;
-                    const domainMetadata = getDomainMetadata(entityData);
-                    const nativeId = this.buildNativeId(entityData, domainMetadata);
-                    this.nativeIdEntityIdMap[nativeId] = entity_id;
-                    this.entitiesMap[entity_id] = entityData;
-                    if (device_id) {
-                        this.entityIdDeviceIdMap[entity_id] = device_id;
+                for (const { area, entities, id, model, name, manufacturer } of devices) {
+                    if (!this.devicesDataMap[id]) {
+                        this.devicesDataMap[id] = {
+                            area,
+                            deviceId: id,
+                            entityIds: [],
+                            manufacturer,
+                            model,
+                            name
+                        }
                     }
 
-                    if (domainMetadata) {
-                        const { interfaces, type } = domainMetadata;
-
-                        if (sdk.deviceManager.getNativeIds().includes(nativeId) || this.discoveredDevices.has(nativeId))
-                            continue;
-
-                        this.discoveredDevices.set(nativeId, {
-                            device: {
-                                nativeId,
-                                name: friendly_name,
-                                interfaces,
-                                type: type as ScryptedDeviceType,
-                                info: {
-                                    manufacturer,
-                                    model
-                                }
-                            },
-                            description: `${friendly_name}`,
-                        });
+                    for (const entityId of entities) {
+                        this.entityIdDeviceIdMap[entityId] = id;
+                        this.devicesDataMap[id].entityIds.push(entityId);
                     }
                 }
             } catch (e) {
                 this.console.error(`Error fetching data for the domain ${domain}`, e);
             }
+        }
+
+        for (const entityData of entities) {
+            const { entity_id, attributes: { friendly_name } } = entityData;
+            const domainMetadata = getDomainMetadata(entityData);
+            const nativeId = this.buildEntityNativeId(entityData, domainMetadata);
+            this.nativeIdEntityIdMap[nativeId] = entity_id;
+            this.entitiesDataMap[entity_id] = entityData;
+
+            if (domainMetadata) {
+                const { interfaces, type } = domainMetadata;
+                const device: Device = {
+                    nativeId,
+                    name: friendly_name || formatEntityIdToDeviceName(entity_id),
+                    interfaces,
+                    type: type as ScryptedDeviceType,
+                };
+
+                const deviceId = this.entityIdDeviceIdMap[entity_id];
+                if (deviceId) {
+                    const deviceData = this.devicesDataMap[deviceId];
+                    device.info = {
+                        manufacturer: deviceData.manufacturer,
+                        model: deviceData.model,
+                    }
+                    device.room = deviceData.area;
+                }
+
+                if (sdk.deviceManager.getNativeIds().includes(nativeId)) {
+                    sdk.deviceManager.onDeviceDiscovered(device);
+                    continue;
+                }
+
+                if (this.discoveredDevices.has(nativeId)) {
+                    continue;
+                }
+
+                this.discoveredDevices.set(nativeId, {
+                    device,
+                    description: `${friendly_name}`,
+                });
+            }
+        }
+
+        const deviceIds = Object.keys(this.devicesDataMap)
+
+        this.console.log(`Entities found to discover: ${JSON.stringify({
+            entities: entities.length,
+            devices: deviceIds.length
+        })}`);
+
+        for (const deviceId of deviceIds) {
+            const { name, manufacturer, model } = this.devicesDataMap[deviceId];
+
+            const nativeId = this.buildDeviceNativeId(deviceId);
+            const device: Device = {
+                nativeId,
+                name,
+                interfaces: [ScryptedInterface.Sensors, ScryptedInterface.Settings],
+                type: ScryptedDeviceType.Sensor,
+                info: {
+                    manufacturer,
+                    model
+                }
+            };
+
+
+            if (sdk.deviceManager.getNativeIds().includes(nativeId)) {
+                sdk.deviceManager.onDeviceDiscovered(device);
+                continue;
+            }
+
+            if (this.discoveredDevices.has(nativeId)) {
+                continue;
+            }
+
+            this.discoveredDevices.set(nativeId, {
+                device,
+                description: `${name}`,
+            });
         }
 
         const notifiersRsponse = await axios.get(new URL('services', this.getApiUrl()).toString(), {
@@ -516,20 +461,27 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         const notify = notifiersRsponse.data.find(service => service.domain === 'notify');
         const { services } = notify;
         for (const service of Object.keys(services)) {
-            const nativeId = `${notifyPrefix}:${service}`;
+            const nativeId = `${HaDomain.Notify}:${service}`;
+            const device: Device = {
+                nativeId,
+                name: service,
+                interfaces: [
+                    ScryptedInterface.Notifier,
+                ],
+                type: ScryptedDeviceType.Notifier,
+            };
 
-            if (sdk.deviceManager.getNativeIds().includes(nativeId) || this.discoveredDevices.has(nativeId))
+            if (sdk.deviceManager.getNativeIds().includes(nativeId)) {
+                sdk.deviceManager.onDeviceDiscovered(device);
                 continue;
+            }
+
+            if (this.discoveredDevices.has(nativeId)) {
+                continue;
+            }
 
             this.discoveredDevices.set(nativeId, {
-                device: {
-                    nativeId,
-                    name: service,
-                    interfaces: [
-                        ScryptedInterface.Notifier,
-                    ],
-                    type: ScryptedDeviceType.Notifier,
-                },
+                device,
                 description: `${service}`,
             });
         }
@@ -548,14 +500,15 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     async adoptDevice(adopt: AdoptDevice): Promise<string> {
         const entry = this.discoveredDevices.get(adopt.nativeId);
-        // this.onDeviceEvent(ScryptedInterface.DeviceDiscovery, await this.discoverDevices());
+        this.onDeviceEvent(ScryptedInterface.DeviceDiscovery, await this.discoverDevices());
         if (!entry)
             throw new Error('device not found');
-        // await this.createDevice(adopt.settings, adopt.nativeId);
+
+        sdk.deviceManager.onDeviceDiscovered(entry.device);
         this.discoveredDevices.delete(adopt.nativeId);
-        // const device = await this.getDevice(adopt.nativeId) as OnvifCamera;
-        // return device.id;
-        return null
+        await this.startWeboscket();
+        const device = this.getEntityOrDevice(adopt.nativeId);
+        return device.id;
     }
 }
 

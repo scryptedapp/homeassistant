@@ -25,24 +25,21 @@ export class HaBaseDevice extends ScryptedDeviceBase {
     refreshConfiguration() {
     }
 
-    getActionFn(serviceUrl: string, payload = this.defaultPayload) {
-        const actionFn = async () => {
-            const url = new URL(serviceUrl, this.plugin.getApiUrl()).toString();
-            this.console.log(`Calling HA action: ${JSON.stringify({
-                url,
-                payload
-            })}`);
+    async getActionFn(serviceUrl: string, payload = this.defaultPayload) {
+        const url = new URL(serviceUrl, this.plugin.getApiUrl()).toString();
+        this.console.log(`Calling HA action: ${JSON.stringify({
+            url,
+            payload
+        })}`);
 
-            return await axios.post(
-                url,
-                payload,
-                {
-                    headers: this.plugin.getHeaders(),
-                    httpsAgent,
-                });
-        }
+        const response = await axios.post(
+            url,
+            payload,
+            {
+                headers: this.plugin.getHeaders(),
+                httpsAgent,
+            });
 
-
-        return actionFn;
+        this.console.log(`Response to ${serviceUrl.split('/').pop()}`, response.data);
     }
 }

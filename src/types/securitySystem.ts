@@ -1,6 +1,6 @@
 import { SecuritySystem, SecuritySystemMode } from "@scrypted/sdk";
 import { HaBaseDevice } from "./baseDevice";
-import { HaEntityData } from "../utils";
+import { HaDomain, HaEntityData } from "../utils";
 
 enum HaAlarmControlPanelState {
     Disarmed = 'disarmed',
@@ -15,6 +15,10 @@ const haToScryptedStateMap: Record<HaAlarmControlPanelState, SecuritySystemMode>
     [HaAlarmControlPanelState.ArmedHome]: SecuritySystemMode.HomeArmed,
     [HaAlarmControlPanelState.ArmedNight]: SecuritySystemMode.NightArmed,
 }
+const hcryptedToHaStateMap: Record<SecuritySystemMode, HaAlarmControlPanelState> = Object.entries(haToScryptedStateMap).reduce((acc, [key, value]) => {
+    acc[value as unknown as SecuritySystemMode] = key as HaAlarmControlPanelState;
+    return acc;
+}, {} as Record<SecuritySystemMode, HaAlarmControlPanelState>);
 
 export class HaSecuritySystem extends HaBaseDevice implements SecuritySystem {
     async updateState(entityData: HaEntityData<HaAlarmControlPanelState>) {
@@ -28,11 +32,16 @@ export class HaSecuritySystem extends HaBaseDevice implements SecuritySystem {
         }
     }
 
-    armSecuritySystem(mode: SecuritySystemMode): Promise<void> {
-        throw new Error("Method not implemented.");
+    async armSecuritySystem(mode: SecuritySystemMode): Promise<void> {
+        const haMode = hcryptedToHaStateMap[mode];
+        if (haMode) {
+            await this.getActionFn(`services/${HaDomain.AlarmControlPanel}/${haMode}`);
+        } else {
+            this.console.error('Alarm mode not mapped', mode);
+        }
     }
 
-    disarmSecuritySystem(): Promise<void> {
-        throw new Error("Method not implemented.");
+    async disarmSecuritySystem(): Promise<void> {
+        await this.getActionFn(`services/${HaDomain.AlarmControlPanel}/${HaAlarmControlPanelState.Disarmed}`);
     }
 }

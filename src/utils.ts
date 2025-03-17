@@ -13,6 +13,7 @@ import { HaLock } from "./types/lock";
 import { HaScript } from "./types/script";
 import { HaSecuritySystem } from "./types/securitySystem";
 import { HaSwitch } from "./types/switch";
+import { HaMediaPlayer } from "./types/mediaPlayer";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -27,6 +28,7 @@ export enum HaDomain {
     Sensor = 'sensor',
     Device = 'haDevice',
     Notify = 'notify',
+    MediaPlayer = 'media_player',
 }
 
 interface Attributes {
@@ -64,6 +66,7 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.Climate,
     HaDomain.Cover,
     HaDomain.Sensor,
+    HaDomain.MediaPlayer,
 ];
 
 export const formatEntityIdToDeviceName = (entityId) => {
@@ -126,6 +129,17 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         interfaces: [ScryptedInterface.Program],
         nativeIdPrefix: 'haScript',
         deviceConstructor: HaScript
+    },
+    [HaDomain.MediaPlayer]: {
+        type: ScryptedDeviceType.Display,
+        interfaces: [
+            ScryptedInterface.MediaPlayer,
+            ScryptedInterface.OnOff,
+            ScryptedInterface.AudioVolumeControl,
+            ScryptedInterface.Pause
+        ],
+        nativeIdPrefix: 'haMediaPlayer',
+        deviceConstructor: HaMediaPlayer
     },
     [HaDomain.Cover]: {
         type: ScryptedDeviceType.WindowCovering,

@@ -17,12 +17,10 @@ export class HaLight extends HaBaseDevice implements OnOff {
     }
 
     async turnOff(): Promise<void> {
-        const response = await this.getActionFn(`services/${HaDomain.Light}/turn_off`)();
-        this.console.log('Response to turnOff', response.data);
+        await this.getActionFn(`services/${HaDomain.Light}/turn_off`);
     }
 
     async turnOn(): Promise<void> {
-        const response = await this.getActionFn(`services/${HaDomain.Light}/turn_on`)();
-        this.console.log('Response to turnOn', response.data);
+        await this.getActionFn(`services/${HaDomain.Light}/turn_on`);
     }
 }

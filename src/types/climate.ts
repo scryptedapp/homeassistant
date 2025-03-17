@@ -70,20 +70,23 @@ export class HaClimate extends HaBaseDevice implements Thermometer, TemperatureS
         return this.storageSettings.putSetting(key, value);
     }
 
-    turnOff(): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Climate}/turn_off`)();
+    async turnOff(): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Climate}/turn_off`)();
+        this.console.log('Response to turnOff', response.data);
     }
 
-    turnOn(): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Climate}/turn_on`)();
+    async turnOn(): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Climate}/turn_on`)();
+        this.console.log('Response to turnOn', response.data);
     }
 
-    setTemperature(command: TemperatureCommand): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Climate}/set_temperature`, {
+    async setTemperature(command: TemperatureCommand): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Climate}/set_temperature`, {
             ...this.defaultPayload,
             temperature: command.setpoint,
             hvac_mode: command.mode ? scryptedToHaStateMap[command.mode] : undefined,
         })();
+        this.console.log('Response to setTemperature', response.data);
     }
 
     setTemperatureUnit(temperatureUnit: TemperatureUnit): Promise<void> {

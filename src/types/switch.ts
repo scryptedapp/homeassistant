@@ -16,11 +16,13 @@ export class HaSwitch extends HaBaseDevice implements OnOff {
         }
     }
 
-    turnOff(): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Switch}/turn_off`)();
+    async turnOff(): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Switch}/turn_off`)();
+        this.console.log('Response to turnOff', response.data);
     }
 
-    turnOn(): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Switch}/turn_on`)();
+    async turnOn(): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Switch}/turn_on`)();
+        this.console.log('Response to turnOn', response.data);
     }
 }

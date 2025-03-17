@@ -23,10 +23,12 @@ export class HaLock extends HaBaseDevice implements Lock {
         }
     }
 
-    lock(): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Lock}/lock`)();
+    async lock(): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Lock}/lock`)();
+        this.console.log('Response to lock', response.data);
     }
-    unlock(): Promise<void> {
-        return this.getActionFn(`services/${HaDomain.Lock}/unlock`)();
+    async unlock(): Promise<void> {
+        const response = await this.getActionFn(`services/${HaDomain.Lock}/unlock`)();
+        this.console.log('Response to unlock', response.data);
     }
 }

@@ -233,6 +233,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 this.wsUnsubFn = undefined;
             }
 
+            const singleEntityEnabled: Record<string, boolean> = {};
             const entityIds: string[] = [];
             const nativeIds = sdk.deviceManager.getNativeIds();
             for (const nativeId of nativeIds) {
@@ -251,7 +252,10 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 } else if (domain === HaDomain.Notify) {
                     // no-op
                 } else {
-                    entityId && entityIds.push(entityId);
+                    if (entityId) {
+                        entityIds.push(entityId);
+                        singleEntityEnabled[entityId] = true;
+                    }
                 }
             }
 
@@ -268,19 +272,22 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                         const currentNativeIds = sdk.deviceManager.getNativeIds();
                         for (const entity of Object.values(entities)) {
                             const { entity_id } = entity;
-                            const entityNativeId = this.buildEntityNativeId(entity);
 
                             // Check if the entity is ingesteded as Entity device standalone
-                            if (entityNativeId && currentNativeIds.includes(entityNativeId)) {
-                                let device = this.deviceMap[entityNativeId];
+                            if (singleEntityEnabled[entity_id]) {
+                                const entityNativeId = this.buildEntityNativeId(entity);
 
-                                if (!device) {
-                                    device = this.getEntityOrDevice(entityNativeId);
-                                    this.deviceMap[entityNativeId] = device;
-                                }
+                                if (entityNativeId && currentNativeIds.includes(entityNativeId)) {
+                                    let device = this.deviceMap[entityNativeId];
 
-                                if (device) {
-                                    await device.updateStateParent(entity);
+                                    if (!device) {
+                                        device = this.getEntityOrDevice(entityNativeId);
+                                        this.deviceMap[entityNativeId] = device;
+                                    }
+
+                                    if (device) {
+                                        await device.updateStateParent(entity);
+                                    }
                                 }
                             }
 
@@ -327,6 +334,50 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             httpsAgent,
         });
 
+        for (const domain of supportedDomains) {
+            try {
+                const allDomainEntities = allEntitiesResponse.data.filter(entity => entity.entity_id.split('.')[0] === domain).map(entity => entity.entity_id);
+
+                const size = Math.max(1, Math.floor(100));
+                const chunks = [];
+
+                for (let i = 0; i < allDomainEntities.length; i += size) {
+                    chunks.push(allDomainEntities.slice(i, i + size));
+                }
+
+                for (const chunk of chunks) {
+                    const payload = {
+                        template: buildDevicesTemplate(chunk)
+                    };
+                    const devicesResponse = await axios.post<DevicesQueryResultItem[]>(new URL('template', this.getApiUrl()).toString(), payload, {
+                        headers: this.getHeaders(),
+                        httpsAgent,
+                    });
+                    const devices = devicesResponse.data;
+
+                    for (const { area, entities: deviceEntities, id, model, name, manufacturer } of devices) {
+                        if (!this.devicesDataMap[id]) {
+                            this.devicesDataMap[id] = {
+                                area,
+                                deviceId: id,
+                                entityIds: [],
+                                manufacturer,
+                                model,
+                                name
+                            }
+                        }
+
+                        for (const entityId of deviceEntities) {
+                            this.entityIdDeviceIdMap[entityId] = id;
+                            this.devicesDataMap[id].entityIds.push(entityId);
+                        }
+                    }
+                }
+            } catch (e) {
+                this.console.error(`Error fetching data for the domain ${domain}`, e);
+            }
+        }
+
         const entities = allEntitiesResponse.data.filter((entity) => {
             const { entity_id } = entity;
             const [domain] = entity_id.split('.');
@@ -338,40 +389,6 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 return true
             }
         });
-
-        for (const domain of supportedDomains) {
-            try {
-                const domainEntities = entities.filter(entity => entity.entity_id.split('.')[0] === domain).map(entity => entity.entity_id);
-                const payload = {
-                    template: buildDevicesTemplate(domainEntities)
-                };
-                const devicesResponse = await axios.post<DevicesQueryResultItem[]>(new URL('template', this.getApiUrl()).toString(), payload, {
-                    headers: this.getHeaders(),
-                    httpsAgent,
-                });
-                const devices = devicesResponse.data;
-
-                for (const { area, entities, id, model, name, manufacturer } of devices) {
-                    if (!this.devicesDataMap[id]) {
-                        this.devicesDataMap[id] = {
-                            area,
-                            deviceId: id,
-                            entityIds: [],
-                            manufacturer,
-                            model,
-                            name
-                        }
-                    }
-
-                    for (const entityId of entities) {
-                        this.entityIdDeviceIdMap[entityId] = id;
-                        this.devicesDataMap[id].entityIds.push(entityId);
-                    }
-                }
-            } catch (e) {
-                this.console.error(`Error fetching data for the domain ${domain}`, e);
-            }
-        }
 
         for (const entityData of entities) {
             const { entity_id, attributes: { friendly_name } } = entityData;

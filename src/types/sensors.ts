@@ -2,7 +2,7 @@ import { Settings, Sensors, Setting, SettingValue, ScryptedInterface, Sensor } f
 import HomeAssistantPlugin from "../main";
 import { HaEntityData } from "../utils";
 import { HaBaseDevice } from "./baseDevice";
-import { UnitConverter } from "../unitConverter";
+import { Unit, UnitConverter } from "../unitConverter";
 import { StorageSettings } from "@scrypted/sdk/storage-settings";
 
 export class HaSensors extends HaBaseDevice implements Sensors, Settings {
@@ -51,18 +51,23 @@ export class HaSensors extends HaBaseDevice implements Sensors, Settings {
 
             const { state, entity_id, attributes: { unit_of_measurement, friendly_name } } = entityData;
 
-            const unit = unit_of_measurement ? UnitConverter.getUnit(unit_of_measurement)?.unit : undefined;
+            const unitEntity = unit_of_measurement ? UnitConverter.getUnit(unit_of_measurement) : undefined;
+
+            if (unit_of_measurement && unitEntity.unit === Unit.NONE) {
+                this.console.warn(`Unit ${unit_of_measurement} not supported: ${entity_id}`);
+            }
+
             const numericValue = Number(state);
 
             let value = state;
 
             if (!Number.isNaN(numericValue)) {
-                value = UnitConverter.localToSi(numericValue, unit);
+                value = UnitConverter.localToSi(numericValue, unitEntity);
             }
 
             const updatedSensorData: Sensor = {
                 name: friendly_name,
-                unit,
+                unit: unitEntity?.siUnit ?? unitEntity?.unit,
                 value
             };
 

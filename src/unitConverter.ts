@@ -33,7 +33,7 @@ export enum Unit {
     BAR = 'bar'
 }
 
-const siUnitMap: Record<UnitGroup, Unit> = {
+export const siUnitMap: Record<UnitGroup, Unit> = {
     [UnitGroup.None]: Unit.NONE,
     [UnitGroup.Length]: Unit.M,
     [UnitGroup.Pressure]: Unit.PA,
@@ -43,6 +43,7 @@ const siUnitMap: Record<UnitGroup, Unit> = {
 
 interface UnitData {
     unit: Unit;
+    siUnit?: Unit;
     unitGroup: UnitGroup;
     factor?: number;
     conversionFormula?: string;
@@ -140,7 +141,10 @@ export class UnitConverter {
                 unitGroup: UnitGroup.None,
             };
         } else {
-            return unitData;
+            return {
+                ...unitData,
+                siUnit: siUnitMap[unitData.unitGroup]
+            };
         }
     }
 

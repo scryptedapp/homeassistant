@@ -11,13 +11,13 @@ import { NotifyDevice } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
 import { HaSensors } from './types/sensors';
 import { buildDevicesTemplate, DevicesQueryResultItem, DomainMetadata, formatEntityIdToDeviceName, getDomainMetadata, getSensorType, HaDeviceData, HaDomain, HaEntityData, subscribeEntities, supportedDomains } from './utils';
-import { HaWebsocket } from './websocket';
+import { Auth, HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
 
 globalThis.WebSocket = HaWebsocket as any;
 
 const retryDelay = 10;
-const maxRetries = 20;
+const maxRetries = 100;
 
 if (process.env.SUPERVISOR_TOKEN)
     clearWWWDirectory();
@@ -142,14 +142,21 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         if (this.connection) {
             this.connection.close();
         }
-
         try {
-            const auth = createLongLivedTokenAuth(
-                this.getApiUrl().origin,
-                this.storageSettings.values.personalAccessToken,
-            );
+            let auth;
 
-            this.connection = await createConnection({ auth });
+            if (process.env.SUPERVISOR_TOKEN) {
+                auth = new Auth({ supervisorToken: process.env.SUPERVISOR_TOKEN });
+            } else {
+                auth = createLongLivedTokenAuth(
+                    this.getApiUrl().origin,
+                    this.storageSettings.values.personalAccessToken,
+                );
+            }
+
+            this.connection = await createConnection({
+                auth
+            });
         } catch (e) {
             throw e;
         }

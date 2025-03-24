@@ -10,7 +10,7 @@ import { httpsAgent } from './httpsagent';
 import { NotifyService } from './notify';
 import { HaBaseDevice } from './types/baseDevice';
 import { deviceNativeIdPrefix, formatEntityIdToDeviceName, getDomainMetadata, HaDeviceData, HaEntityData, subscribeEntities, supportedDomains } from './utils';
-import { HaWebsocket } from './websocket';
+import { Auth, HaWebsocket } from './websocket';
 import { clearWWWDirectory } from './www';
 import { sleep } from '../../scrypted/common/src/sleep';
 
@@ -169,16 +169,20 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             this.connection.close();
         }
 
-        try {
-            const auth = createLongLivedTokenAuth(
+        let auth;
+
+        if (process.env.SUPERVISOR_TOKEN) {
+            auth = new Auth({ supervisorToken: process.env.SUPERVISOR_TOKEN });
+        } else {
+            auth = createLongLivedTokenAuth(
                 this.getApiUrl().origin,
                 this.storageSettings.values.personalAccessToken,
             );
-
-            this.connection = await createConnection({ auth });
-        } catch (e) {
-            throw e;
         }
+
+        this.connection = await createConnection({
+            auth
+        });
     }
 
     buildNativeId(entityData: HaEntityData) {

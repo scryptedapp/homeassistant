@@ -53,16 +53,20 @@ export class HaCover extends HaBaseDevice implements Entry, EntrySensor, Setting
 
     async openEntry(): Promise<void> {
         if (this.storageSettings.values.allowStop && this.coverState === HaCoverState.Closing) {
+            this.coverState = HaCoverState.Open;
             await this.getActionFn(`services/${HaDomain.Cover}/stop_cover`);
         } else {
+            this.coverState = HaCoverState.Opening;
             await this.getActionFn(`services/${HaDomain.Cover}/open_cover`);
         }
     }
 
     async closeEntry(): Promise<void> {
         if (this.storageSettings.values.allowStop && this.coverState === HaCoverState.Opening) {
+            this.coverState = HaCoverState.Open;
             await this.getActionFn(`services/${HaDomain.Cover}/stop_cover`);
         } else {
+            this.coverState = HaCoverState.Closing;
             await this.getActionFn(`services/${HaDomain.Cover}/close_cover`);
         }
     }

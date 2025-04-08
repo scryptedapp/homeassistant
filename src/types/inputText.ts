@@ -1,17 +1,15 @@
-import { Sensors, Setting, Settings, SettingValue } from "@scrypted/sdk";
+import { Sensors, Setting, Settings, SettingValue, TemperatureCommand, TemperatureUnit } from "@scrypted/sdk";
 import { StorageSettings } from '@scrypted/sdk/storage-settings';
 import type HomeAssistantPlugin from "../main";
-import { HaDomain, HaEntityData } from "../utils";
+import {  HaDomain, HaEntityData } from "../utils";
 import { HaBaseDevice } from "./baseDevice";
 
-export class HaInputSelect extends HaBaseDevice implements Sensors, Settings {
+export class HaInputText extends HaBaseDevice implements Sensors, Settings {
     storageSettings = new StorageSettings(this, {
         value: {
             title: 'Value',
             type: 'string',
-            choices: [],
-            immediate: true,
-            onPut: (oldValue, newValue) => oldValue !== newValue && this.selectOption(newValue)
+            onPut: (oldValue, newValue) => oldValue !== newValue && this.setValue(newValue)
         },
     });
 
@@ -30,15 +28,14 @@ export class HaInputSelect extends HaBaseDevice implements Sensors, Settings {
         return this.storageSettings.putSetting(key, value);
     }
 
-    async selectOption(option: string) {
-        await this.getActionFn(`services/${HaDomain.InputSelect}/select_option`, {
+    async setValue(value: string) {
+        await this.getActionFn(`services/${HaDomain.InputText}/set_value`, {
             ...this.defaultPayload,
-            option,
+            value,
         });
     }
 
     async updateState(entityData: HaEntityData) {
-        this.storageSettings.settings.value.choices = entityData.attributes.options;
         this.putSetting('value', entityData.state);
 
         this.sensors = {

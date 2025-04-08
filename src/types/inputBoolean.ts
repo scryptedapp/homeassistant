@@ -1,13 +1,9 @@
-import { HaBaseDevice } from "./baseDevice";
 import { OnOff } from "@scrypted/sdk";
 import { HaDomain, HaEntityData } from "../utils";
+import { HaBaseDevice } from "./baseDevice";
+import { HaSwitchState } from "./switch";
 
-export enum HaSwitchState {
-    On = 'on',
-    Off = 'off'
-}
-
-export class HaSwitch extends HaBaseDevice implements OnOff {
+export class HaInputBoolean extends HaBaseDevice implements OnOff {
     async updateState(entityData: HaEntityData<HaSwitchState>) {
         const { state } = entityData;
 
@@ -18,11 +14,11 @@ export class HaSwitch extends HaBaseDevice implements OnOff {
 
     async turnOff(): Promise<void> {
         this.on = false;
-        await this.getActionFn(`services/${HaDomain.Switch}/turn_off`);
+        await this.getActionFn(`services/${HaDomain.InputBoolean}/turn_off`);
     }
 
     async turnOn(): Promise<void> {
         this.on = true;
-        await this.getActionFn(`services/${HaDomain.Switch}/turn_on`);
+        await this.getActionFn(`services/${HaDomain.InputBoolean}/turn_on`);
     }
 }

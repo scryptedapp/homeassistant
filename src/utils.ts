@@ -14,6 +14,7 @@ import { HaScript } from "./types/script";
 import { HaSecuritySystem } from "./types/securitySystem";
 import { HaSwitch } from "./types/switch";
 import { HaMediaPlayer } from "./types/mediaPlayer";
+import { HaInputBoolean } from "./types/inputBoolean";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -29,6 +30,7 @@ export enum HaDomain {
     Device = 'haDevice',
     Notify = 'notify',
     MediaPlayer = 'media_player',
+    InputBoolean = 'input_boolean',
 }
 
 interface Attributes {
@@ -67,6 +69,7 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.Cover,
     HaDomain.Sensor,
     HaDomain.MediaPlayer,
+    HaDomain.InputBoolean,
 ];
 
 export const formatEntityIdToDeviceName = (entityId) => {
@@ -111,6 +114,12 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         interfaces: [ScryptedInterface.OnOff],
         nativeIdPrefix: 'haSwitch',
         deviceConstructor: HaSwitch
+    },
+    [HaDomain.InputBoolean]: {
+        type: ScryptedDeviceType.Switch,
+        interfaces: [ScryptedInterface.OnOff],
+        nativeIdPrefix: 'haInputBoolean',
+        deviceConstructor: HaInputBoolean
     },
     [HaDomain.Light]: {
         type: ScryptedDeviceType.Light,

@@ -536,7 +536,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         this.discoveredDevices.delete(adopt.nativeId);
         await this.startWeboscket();
         const device = this.getEntityOrDevice(adopt.nativeId);
-        return device.id;
+        return device?.id;
     }
 }
 

@@ -33,6 +33,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     entityIdDeviceIdMap: Record<string, string> = {};
     wsUnsubFn: () => void;
     lastEventReceived: number;
+    lastConnection: number;
     lastRefresh: number;
     disconnectionCheckInterval: NodeJS.Timeout;
     connecting: boolean;
@@ -80,7 +81,9 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     async init() {
         // Check every 30 seconds if an event was received in the latest 10 minutes, if not most likely the WS died
         this.disconnectionCheckInterval = setInterval(async () => {
-            const shouldReconnect = !this.lastEventReceived || (Date.now() - this.lastEventReceived) > 1000 * 60 * 10;
+            const lastEventOld = !this.lastEventReceived || (Date.now() - this.lastEventReceived) > 1000 * 60 * 10;
+            const lastConnectionOld = !this.lastConnection || (Date.now() - this.lastConnection) > 1000 * 60 * 60;
+            const shouldReconnect = lastEventOld || lastConnectionOld;
             if (shouldReconnect && !this.connecting) {
                 this.console.log('No event received in the last 10 minutes, reconnecting');
                 await this.startWeboscket();
@@ -220,6 +223,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 currentTry++;
                 await this.connectWs();
                 isConnected = true;
+                this.lastConnection = Date.now();
                 this.console.log('Connection to WS succeded');
             } catch (e) {
                 this.console.log(`Error ${e} on WS connection, waiting ${retryDelay} seconds`);

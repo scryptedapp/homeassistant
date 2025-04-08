@@ -141,10 +141,15 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         await this.init();
     }
 
-    async connectWs() {
+    async disconnectWs() {
         if (this.connection) {
             this.connection.close();
         }
+    }
+
+    async connectWs() {
+        this.disconnectWs();
+
         try {
             let auth;
 
@@ -534,6 +539,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
         sdk.deviceManager.onDeviceDiscovered(entry.device);
         this.discoveredDevices.delete(adopt.nativeId);
+        this.disconnectWs();
         await this.startWeboscket();
         const device = this.getEntityOrDevice(adopt.nativeId);
         return device?.id;

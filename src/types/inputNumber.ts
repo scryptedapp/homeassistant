@@ -4,11 +4,11 @@ import type HomeAssistantPlugin from "../main";
 import { HaDomain, HaEntityData } from "../utils";
 import { HaBaseDevice } from "./baseDevice";
 
-export class HaInputText extends HaBaseDevice implements Sensors, Settings {
+export class HaInputNumber extends HaBaseDevice implements Sensors, Settings {
     storageSettings = new StorageSettings(this, {
         value: {
             title: 'Value',
-            type: 'string',
+            type: 'number',
             onPut: (oldValue, newValue) => oldValue !== newValue && this.setValue(newValue)
         },
     });
@@ -29,14 +29,14 @@ export class HaInputText extends HaBaseDevice implements Sensors, Settings {
     }
 
     async setValue(value: string) {
-        await this.getActionFn(`services/${HaDomain.InputText}/set_value`, {
+        await this.getActionFn(`services/${HaDomain.InputNumber}/set_value`, {
             ...this.defaultPayload,
             value,
         });
     }
 
     async updateState(entityData: HaEntityData) {
-        this.putSetting('value', entityData.state);
+        this.putSetting('value', Number(entityData.state));
 
         this.sensors = {
             [entityData.entity_id]: {

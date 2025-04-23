@@ -201,13 +201,12 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
 };
 
 export const getSensorType = (entity: HaEntityData) => {
-    const isSensor = entity.entity_id.startsWith('sensor.');
-    const isTemperatureSensor = isSensor && entity.attributes.device_class === 'temperature' && entity.attributes.state_class === 'measurement';
-    const isHumiditySensor = isSensor && entity.attributes.device_class === 'humidity' && entity.attributes.state_class === 'measurement';
+    const isTemperatureSensor = entity.attributes.device_class === 'temperature' && entity.attributes.state_class === 'measurement';
+    const isHumiditySensor = entity.attributes.device_class === 'humidity' && entity.attributes.state_class === 'measurement';
 
     const isSupported = isTemperatureSensor || isHumiditySensor;
 
-    return { isSensor, isTemperatureSensor, isHumiditySensor, isSupported }
+    return { isTemperatureSensor, isHumiditySensor, isSupported };
 }
 
 export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
@@ -237,26 +236,44 @@ export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
     return domainMetadata;
 }
 
-const doorSensorDeviceClasses = ['door', 'opening', 'garage', 'garage_door'];
-export function isDoorSensor(entity: HaEntityData): boolean {
-    return doorSensorDeviceClasses.includes(entity.attributes?.device_class || '');
+export const getBinarySensorType = (entity: HaEntityData) => {
+    const isFLoodSensor = entity.attributes.device_class === 'moisture';
+    const isDoorSensor = ['door', 'opening', 'garage', 'garage_door']
+        .includes(entity.attributes?.device_class || '')
+
+    return { isFLoodSensor, isDoorSensor };
+}
+
+export const mapBinarySensorEntity = (entity: HaEntityData): DomainMetadata => {
+    const { isFLoodSensor, isDoorSensor } = getBinarySensorType(entity);
+
+    let domainMetadata: DomainMetadata;
+    if (isFLoodSensor) {
+        domainMetadata = {
+            type: ScryptedDeviceType.Sensor,
+            interfaces: [ScryptedInterface.FloodSensor],
+            nativeIdPrefix: 'haBinaryFloodSensor',
+            deviceConstructor: HaBinarySensor,
+        }
+    } else if (isDoorSensor) {
+        domainMetadata = {
+            type: ScryptedDeviceType.Entry,
+            interfaces: [ScryptedInterface.EntrySensor],
+            nativeIdPrefix: 'haBinaryDoorSensor',
+            deviceConstructor: HaBinarySensor,
+        }
+    } else {
+        domainMetadata = domainMetadataMap[HaDomain.BinarySensor];
+    }
+
+    return domainMetadata;
 }
 
 export const getDomainMetadata = (entityData: HaEntityData) => {
     const domain = entityData.entity_id.split('.')[0] as HaDomain;
     if (domain === HaDomain.BinarySensor) {
-        if (isDoorSensor(entityData)) {
-            return {
-                type: ScryptedDeviceType.Entry,
-                interfaces: [ScryptedInterface.EntrySensor],
-                nativeIdPrefix: 'haBinaryDoorSensor',
-                deviceConstructor: HaBinarySensor,
-            };
-        } else {
-            return domainMetadataMap[HaDomain.BinarySensor];
-        }
-    }
-    if (domain === HaDomain.Sensor) {
+        return mapBinarySensorEntity(entityData);
+    } else if (domain === HaDomain.Sensor) {
         const metadata = mapSensorEntity(entityData);
         if (!metadata) {
             console.log(`Entity not supported: ${entityData.entity_id}, ${JSON.stringify(entityData)}`);

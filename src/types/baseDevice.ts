@@ -19,6 +19,11 @@ export class HaBaseDevice extends ScryptedDeviceBase {
     }
 
     async updateStateParent(entityData: HaEntityData) {
+        if (this.plugin.storageSettings.values.debug) {
+            this.console.log(`Update entity ${entityData.entity_id}: ${JSON.stringify(entityData)}`);
+        }
+        this.lastUpdate = Date.now();
+
         await this.updateState(entityData);
     }
 

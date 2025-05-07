@@ -69,7 +69,13 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             onPut: () => {
                 this.startWeboscket();
             }
-        }
+        },
+        debug: {
+            title: 'Debug events',
+            type: 'boolean',
+            subgroup: 'Advanced',
+            immediate: true,
+        },
     });
 
     constructor(nativeId?: string) {
@@ -81,11 +87,12 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     async init() {
         // Check every 30 seconds if an event was received in the latest 10 minutes, if not most likely the WS died
         this.disconnectionCheckInterval = setInterval(async () => {
-            const lastEventOld = !this.lastEventReceived || (Date.now() - this.lastEventReceived) > 1000 * 60 * 10;
-            const lastConnectionOld = !this.lastConnection || (Date.now() - this.lastConnection) > 1000 * 60 * 60;
+            const now = Date.now();
+            const lastEventOld = !this.lastEventReceived || (now - this.lastEventReceived) > 1000 * 60 * 10;
+            const lastConnectionOld = !this.lastConnection || (now - this.lastConnection) > 1000 * 60 * 60;
             const shouldReconnect = lastEventOld || lastConnectionOld;
             if (shouldReconnect && !this.connecting) {
-                this.console.log('No event received in the last 10 minutes, reconnecting');
+                this.console.log(`Reconnecting, lastEventOld ${lastEventOld} lastConnectionOld ${lastConnectionOld}`);
                 await this.startWeboscket();
             }
         }, 1000 * 30);
@@ -276,9 +283,17 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             }
 
             if (entityIds.length) {
-                this.console.log(`Subscribing to ${entityIds.length} entities: ${JSON.stringify({ entityIds })}`);
+                this.console.log(`Subscribing to ${entityIds.length} entities`);
+
+                if (this.storageSettings.values.debug) {
+                    this.console.log(`${JSON.stringify({ entityIds })}`);
+                }
+
                 this.wsUnsubFn = subscribeEntities(this.connection, entityIds, async (entities: Record<string, HaEntityData>) => {
-                    // this.console.log(`Entities update received: ${JSON.stringify(entities)}`);
+                    if (this.storageSettings.values.debug) {
+                        this.console.log(`Entities update received: ${JSON.stringify(entities)}`);
+                    }
+
                     this.lastEventReceived = Date.now();
                     if (this.processing) {
                         return;
@@ -533,11 +548,12 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     async adoptDevice(adopt: AdoptDevice): Promise<string> {
         const entry = this.discoveredDevices.get(adopt.nativeId);
-        this.onDeviceEvent(ScryptedInterface.DeviceDiscovery, await this.discoverDevices());
+        await this.onDeviceEvent(ScryptedInterface.DeviceDiscovery, await this.discoverDevices());
+
         if (!entry)
             throw new Error('device not found');
 
-        sdk.deviceManager.onDeviceDiscovered(entry.device);
+        await sdk.deviceManager.onDeviceDiscovered(entry.device);
         this.discoveredDevices.delete(adopt.nativeId);
         this.disconnectWs();
         await this.startWeboscket();

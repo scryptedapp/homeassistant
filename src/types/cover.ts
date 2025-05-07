@@ -21,7 +21,7 @@ export class HaCover extends HaBaseDevice implements Entry, EntrySensor, Setting
             type: 'boolean',
             immediate: true,
             defaultValue: true
-        },
+        }
     });
 
     async getSettings() {
@@ -35,10 +35,11 @@ export class HaCover extends HaBaseDevice implements Entry, EntrySensor, Setting
     }
 
     async updateState(entityData: HaEntityData<HaCoverState>) {
+        const { allowStop } = this.storageSettings.values;
         const { attributes, state } = entityData;
         this.coverState = state;
 
-        if (this.storageSettings.values.allowStop) {
+        if (allowStop) {
             if (state === HaCoverState.Closing) {
                 this.entryOpen = false;
             } else if (state === HaCoverState.Opening) {
@@ -52,21 +53,37 @@ export class HaCover extends HaBaseDevice implements Entry, EntrySensor, Setting
     }
 
     async openEntry(): Promise<void> {
-        if (this.storageSettings.values.allowStop && this.coverState === HaCoverState.Closing) {
-            this.coverState = HaCoverState.Open;
-            await this.getActionFn(`services/${HaDomain.Cover}/stop_cover`);
+        const { allowStop } = this.storageSettings.values;
+
+        if (allowStop) {
+            if (this.coverState === HaCoverState.Closing) {
+                this.console.log(`Stopping because opening and current state is ${this.coverState}`);
+                this.coverState = HaCoverState.Open;
+                await this.getActionFn(`services/${HaDomain.Cover}/stop_cover`);
+            } else {
+                this.console.log(`Opening because opening and current state is ${this.coverState}`);
+                this.coverState = HaCoverState.Opening;
+                await this.getActionFn(`services/${HaDomain.Cover}/open_cover`);
+            }
         } else {
-            this.coverState = HaCoverState.Opening;
             await this.getActionFn(`services/${HaDomain.Cover}/open_cover`);
         }
     }
 
     async closeEntry(): Promise<void> {
-        if (this.storageSettings.values.allowStop && this.coverState === HaCoverState.Opening) {
-            this.coverState = HaCoverState.Open;
-            await this.getActionFn(`services/${HaDomain.Cover}/stop_cover`);
+        const { allowStop } = this.storageSettings.values;
+
+        if (allowStop) {
+            if (this.coverState === HaCoverState.Opening) {
+                this.console.log(`Stopping because closing and current state is ${this.coverState}`);
+                this.coverState = HaCoverState.Open;
+                await this.getActionFn(`services/${HaDomain.Cover}/stop_cover`);
+            } else {
+                this.console.log(`Stopping because closing and current state is ${this.coverState}`);
+                this.coverState = HaCoverState.Closing;
+                await this.getActionFn(`services/${HaDomain.Cover}/close_cover`);
+            }
         } else {
-            this.coverState = HaCoverState.Closing;
             await this.getActionFn(`services/${HaDomain.Cover}/close_cover`);
         }
     }

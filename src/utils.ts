@@ -251,14 +251,14 @@ export const mapBinarySensorEntity = (entity: HaEntityData): DomainMetadata => {
     if (isFLoodSensor) {
         domainMetadata = {
             type: ScryptedDeviceType.Sensor,
-            interfaces: [ScryptedInterface.FloodSensor],
+            interfaces: [ScryptedInterface.FloodSensor, ScryptedInterface.BinarySensor],
             nativeIdPrefix: 'haBinaryFloodSensor',
             deviceConstructor: HaBinarySensor,
         }
     } else if (isDoorSensor) {
         domainMetadata = {
             type: ScryptedDeviceType.Entry,
-            interfaces: [ScryptedInterface.EntrySensor],
+            interfaces: [ScryptedInterface.EntrySensor, ScryptedInterface.BinarySensor],
             nativeIdPrefix: 'haBinaryDoorSensor',
             deviceConstructor: HaBinarySensor,
         }

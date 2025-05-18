@@ -476,7 +476,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             const nativeId = this.buildDeviceNativeId(deviceId);
             const device: Device = {
                 nativeId,
-                name,
+                name: `${name} (Device)`,
                 interfaces: [ScryptedInterface.Sensors, ScryptedInterface.Settings],
                 type: ScryptedDeviceType.Sensor,
                 info: {
@@ -484,7 +484,6 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                     model
                 }
             };
-
 
             if (sdk.deviceManager.getNativeIds().includes(nativeId)) {
                 sdk.deviceManager.onDeviceDiscovered(device);

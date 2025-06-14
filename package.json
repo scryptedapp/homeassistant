@@ -1,6 +1,6 @@
 {
   "name": "@scrypted/homeassistant",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "scripts": {
     "scrypted-setup-project": "scrypted-setup-project",
     "prescrypted-setup-project": "scrypted-package-json",
@@ -19,7 +19,6 @@
     "type": "DeviceProvider",
     "interfaces": [
       "DeviceProvider",
-      "DeviceCreator",
       "Settings",
       "DeviceDiscovery"
     ],

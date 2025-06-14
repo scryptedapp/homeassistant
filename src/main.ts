@@ -47,15 +47,14 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         personalAccessToken: {
             title: 'Personal Access Token',
             description: 'Provide a personal access token for your Home Assistant user. Needed to support navigation back into the Scrypted addon.',
+            onPut: async () => await sdk.deviceManager.requestRestart()
         },
         address: {
             title: 'Address',
             description: 'The host and port of the Home Assistant server. E.g. 192.168.2.100:8123',
             hide: !!process.env.SUPERVISOR_TOKEN,
             placeholder: '192.168.2.100:8123',
-            onPut: () => {
-                this.startWeboscket();
-            }
+            onPut: async () => await sdk.deviceManager.requestRestart()
         },
         protocol: {
             title: 'Protocol',
@@ -66,15 +65,17 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
                 'http',
                 'https',
             ],
-            onPut: () => {
-                this.startWeboscket();
-            }
+            onPut: async () => await sdk.deviceManager.requestRestart()
         },
         debug: {
             title: 'Debug events',
             type: 'boolean',
             subgroup: 'Advanced',
             immediate: true,
+        },
+        notifiersDiscovered: {
+            type: 'boolean',
+            hide: true,
         },
     });
 
@@ -98,6 +99,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         }, 1000 * 30);
 
         await this.discoverDevices(true);
+        await this.checkNotifiersDiscovery();
         await this.startWeboscket();
     }
 
@@ -107,6 +109,20 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
     putSetting(key: string, value: SettingValue): Promise<void> {
         return this.storageSettings.putSetting(key, value);
+    }
+
+    async checkNotifiersDiscovery() {
+        if (!this.storageSettings.values.notifiersDiscovered) {
+            const notifiers = Array.from(this.discoveredDevices).filter(([nativeId]) => nativeId.startsWith('notify:'));
+            this.console.log(`Adopting notifiers for the first start`);
+
+            for (const [_, device] of notifiers) {
+                await sdk.deviceManager.onDeviceDiscovered(
+                    device.device
+                );
+            }
+            this.storageSettings.values.notifiersDiscovered = true;
+        }
     }
 
     getApiUrl() {
@@ -134,8 +150,8 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
             this.notifiersMap[nativeId] = ret;
             return ret;
         } else {
-            if (this.notifiersMap[nativeId]) {
-                return this.notifiersMap[nativeId];
+            if (this.deviceMap[nativeId]) {
+                return this.deviceMap[nativeId];
             }
 
             const ret = this.getEntityOrDevice(nativeId);

@@ -86,6 +86,15 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async init() {
+        const allSettingsConfigured = !!this.storageSettings.values.personalAccessToken &&
+            !!this.storageSettings.values.address &&
+            !!this.storageSettings.values.protocol;
+
+        if (!allSettingsConfigured) {
+            this.console.log(`Some of the required settings are not provided`);
+            return;
+        }
+
         // Check every 30 seconds if an event was received in the latest 10 minutes, if not most likely the WS died
         this.disconnectionCheckInterval = setInterval(async () => {
             const now = Date.now();
@@ -174,7 +183,7 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         this.disconnectWs();
 
         try {
-            let auth;
+            let auth: Auth;
 
             if (process.env.SUPERVISOR_TOKEN) {
                 auth = new Auth({ supervisorToken: process.env.SUPERVISOR_TOKEN });

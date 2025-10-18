@@ -239,13 +239,15 @@ export const mapSensorEntity = (entity: HaEntityData): DomainMetadata => {
 export const getBinarySensorType = (entity: HaEntityData) => {
     const isFLoodSensor = entity.attributes.device_class === 'moisture';
     const isDoorSensor = ['door', 'opening', 'garage', 'garage_door']
-        .includes(entity.attributes?.device_class || '')
+        .includes(entity.attributes?.device_class || '');
+    const isMotionSensor = ['motion', 'occupancy', 'moving']
+        .includes(entity.attributes?.device_class || '');
 
-    return { isFLoodSensor, isDoorSensor };
+    return { isFLoodSensor, isDoorSensor, isMotionSensor };
 }
 
 export const mapBinarySensorEntity = (entity: HaEntityData): DomainMetadata => {
-    const { isFLoodSensor, isDoorSensor } = getBinarySensorType(entity);
+    const { isFLoodSensor, isDoorSensor, isMotionSensor } = getBinarySensorType(entity);
 
     let domainMetadata: DomainMetadata;
     if (isFLoodSensor) {
@@ -260,6 +262,13 @@ export const mapBinarySensorEntity = (entity: HaEntityData): DomainMetadata => {
             type: ScryptedDeviceType.Entry,
             interfaces: [ScryptedInterface.EntrySensor, ScryptedInterface.BinarySensor],
             nativeIdPrefix: 'haBinaryDoorSensor',
+            deviceConstructor: HaBinarySensor,
+        }
+    } else if (isMotionSensor) {
+        domainMetadata = {
+            type: ScryptedDeviceType.Sensor,
+            interfaces: [ScryptedInterface.MotionSensor, ScryptedInterface.BinarySensor],
+            nativeIdPrefix: 'haBinaryMotionSensor',
             deviceConstructor: HaBinarySensor,
         }
     } else {

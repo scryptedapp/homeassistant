@@ -18,6 +18,8 @@ import { HaInputBoolean } from "./types/inputBoolean";
 import { HaInputSelect } from "./types/inputSelect";
 import { HaInputText } from "./types/inputText";
 import { HaInputNumber } from "./types/inputNumber";
+import { HaInputButton } from "./types/inputButton";
+import { HaSelect } from "./types/select";
 
 export enum HaDomain {
     BinarySensor = 'binary_sensor',
@@ -29,11 +31,13 @@ export enum HaDomain {
     Script = 'script',
     Cover = 'cover',
     Climate = 'climate',
+    Select = 'select',
     Sensor = 'sensor',
     Device = 'haDevice',
     Notify = 'notify',
     MediaPlayer = 'media_player',
     InputBoolean = 'input_boolean',
+    InputButton = 'input_button',
     InputSelect = 'input_select',
     InputText = 'input_text',
     InputNumber = 'input_number',
@@ -75,9 +79,11 @@ export const supportedDomains: HaDomain[] = [
     HaDomain.Climate,
     HaDomain.Cover,
     HaDomain.Sensor,
+    HaDomain.Select,
     HaDomain.MediaPlayer,
     HaDomain.InputBoolean,
     HaDomain.InputSelect,
+    HaDomain.InputButton,
     HaDomain.InputText,
     HaDomain.InputNumber,
 ];
@@ -134,8 +140,14 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
     [HaDomain.InputSelect]: {
         type: ScryptedDeviceType.Sensor,
         interfaces: [ScryptedInterface.Sensors, ScryptedInterface.Settings],
-        nativeIdPrefix: 'haInputSensor',
+        nativeIdPrefix: 'haInputSelect',
         deviceConstructor: HaInputSelect
+    },
+    [HaDomain.Select]: {
+        type: ScryptedDeviceType.Sensor,
+        interfaces: [ScryptedInterface.Sensors, ScryptedInterface.Settings],
+        nativeIdPrefix: 'haSelect',
+        deviceConstructor: HaSelect
     },
     [HaDomain.InputText]: {
         type: ScryptedDeviceType.Sensor,
@@ -160,6 +172,12 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         interfaces: [ScryptedInterface.PressButtons],
         nativeIdPrefix: 'haButton',
         deviceConstructor: HaButton
+    },
+    [HaDomain.InputButton]: {
+        type: 'Button',
+        interfaces: [ScryptedInterface.PressButtons],
+        nativeIdPrefix: 'haInputButton',
+        deviceConstructor: HaInputButton
     },
     [HaDomain.Script]: {
         type: ScryptedDeviceType.Program,

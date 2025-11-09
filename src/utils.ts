@@ -168,14 +168,14 @@ export const domainMetadataMap: Record<HaDomain, DomainMetadata> = {
         deviceConstructor: HaLight
     },
     [HaDomain.Button]: {
-        type: 'Button',
-        interfaces: [ScryptedInterface.PressButtons],
+        type: ScryptedDeviceType.Buttons,
+        interfaces: [ScryptedInterface.Buttons, ScryptedInterface.PressButtons],
         nativeIdPrefix: 'haButton',
         deviceConstructor: HaButton
     },
     [HaDomain.InputButton]: {
-        type: 'Button',
-        interfaces: [ScryptedInterface.PressButtons],
+        type: ScryptedDeviceType.Buttons,
+        interfaces: [ScryptedInterface.Buttons, ScryptedInterface.PressButtons],
         nativeIdPrefix: 'haInputButton',
         deviceConstructor: HaInputButton
     },

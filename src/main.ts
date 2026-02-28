@@ -86,9 +86,11 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
     }
 
     async init() {
-        const allSettingsConfigured = !!this.storageSettings.values.personalAccessToken &&
-            !!this.storageSettings.values.address &&
-            !!this.storageSettings.values.protocol;
+        const allSettingsConfigured = process.env.SUPERVISOR_TOKEN
+            ? true // addon: only SUPERVISOR_TOKEN from env is required
+            : (!!this.storageSettings.values.personalAccessToken &&
+                !!this.storageSettings.values.address &&
+                !!this.storageSettings.values.protocol);
 
         if (!allSettingsConfigured) {
             this.console.log(`Some of the required settings are not provided`);

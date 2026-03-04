@@ -42,6 +42,8 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
         device: Device;
         description: string;
     }>();
+    /** Entity IDs we already logged a nativeId mismatch for (to avoid log flood). */
+    nativeIdMismatchLogged = new Set<string>();
 
     storageSettings = new StorageSettings(this, {
         personalAccessToken: {
@@ -333,7 +335,33 @@ class HomeAssistantPlugin extends ScryptedDeviceBase implements DeviceProvider, 
 
                             // Check if the entity is ingesteded as Entity device standalone
                             if (singleEntityEnabled[entity_id]) {
-                                const entityNativeId = this.buildEntityNativeId(entity);
+                                const expectedNativeId = this.buildEntityNativeId(entity);
+
+                                let entityNativeId = expectedNativeId;
+                                if (entityNativeId && !currentNativeIds.includes(entityNativeId)) {
+                                    const adoptedMatch = currentNativeIds.find(nid => {
+                                        if (nid == null || typeof nid !== 'string') return false;
+                                        const idx = nid.indexOf(':');
+                                        const suffix = idx >= 0 ? nid.slice(idx + 1) : nid;
+                                        return suffix === entity_id;
+                                    });
+                                    const logKey = `${entity_id}:${adoptedMatch ?? 'none'}`;
+                                    if (!this.nativeIdMismatchLogged.has(logKey)) {
+                                        this.nativeIdMismatchLogged.add(logKey);
+                                        if (adoptedMatch) {
+                                            this.console.warn(
+                                                `NativeId mismatch for adopted entity: entity_id=${entity_id}, friendly_name=${entity?.attributes?.friendly_name ?? 'n/a'}, device_class=${entity?.attributes?.device_class ?? 'n/a'}. ` +
+                                                `Expected nativeId="${expectedNativeId}" not in adopted list; using adopted nativeId="${adoptedMatch}". State updates will work.`
+                                            );
+                                        } else {
+                                            this.console.error(
+                                                `NativeId mismatch for adopted entity — state updates will NOT be applied: entity_id=${entity_id}, friendly_name=${entity?.attributes?.friendly_name ?? 'n/a'}, device_class=${entity?.attributes?.device_class ?? 'n/a'}. ` +
+                                                `Expected nativeId="${expectedNativeId}". No matching adopted device found. Consider re-adding the device from discovery.`
+                                            );
+                                        }
+                                    }
+                                    entityNativeId = adoptedMatch ?? undefined;
+                                }
 
                                 if (entityNativeId && currentNativeIds.includes(entityNativeId)) {
                                     let device = this.deviceMap[entityNativeId];
